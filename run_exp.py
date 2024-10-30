@@ -1,11 +1,16 @@
 import csv
 import subprocess
+import argparse
 
-# Path to your CSV file
-csv_file = "exp_configs.csv"
+# Set up argument parsing
+parser = argparse.ArgumentParser(description="Run experiments based on CSV configuration.")
+parser.add_argument("csv_file", type=str, help="Path to the CSV file with experiment configurations")
+
+# Parse the arguments
+args = parser.parse_args()
 
 # Open and read the CSV file
-with open(csv_file, newline='') as csvfile:
+with open(args.csv_file, newline='') as csvfile:
     reader = csv.reader(csvfile)
     
     # Skip the header (first row)
@@ -24,7 +29,7 @@ with open(csv_file, newline='') as csvfile:
             "--nn_model", nn_model,
             "--heterogeneity_type", heterogeneity_type,
             "--num_clients", num_clients,
-            "--num_samples_by_label", num_samples_by_label,
+            "--num_samples_by_label", num_samples_by_label,exp_config
             "--num_clusters", num_clusters,
             "--centralized_epochs", centralized_epochs,
             "--federated_rounds", federated_rounds,

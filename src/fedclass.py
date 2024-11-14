@@ -51,6 +51,7 @@ class Client:
             'id': self.id, 
             'cluster_id': self.cluster_id,
             'heterogeneity_class': self.heterogeneity_class,
+            'skew' : self.skew,
             'accuracy': self.accuracy
         }
     

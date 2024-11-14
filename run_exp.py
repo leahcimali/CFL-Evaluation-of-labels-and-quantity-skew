@@ -29,7 +29,7 @@ with open(args.csv_file, newline='') as csvfile:
             "--nn_model", nn_model,
             "--heterogeneity_type", heterogeneity_type,
             "--num_clients", num_clients,
-            "--num_samples_by_label", num_samples_by_label,exp_config
+            "--num_samples_by_label", num_samples_by_label,
             "--num_clusters", num_clusters,
             "--centralized_epochs", centralized_epochs,
             "--federated_rounds", federated_rounds,

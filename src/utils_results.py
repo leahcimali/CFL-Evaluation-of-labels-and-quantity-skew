@@ -98,40 +98,73 @@ def plot_img(img : tensor) -> None:
 
 
 
-def plot_histogram_clusters(df_results: DataFrame, title : str) -> None:
+def plot_histogram_clusters(df_results: DataFrame, title: str) -> None:
+    """ Function to create 3D Histograms of clients to cluster assignments showing client's heterogeneity class
+    with skew values represented as hue in a stacked bar format.
     
-    """ Function to create 3D Histograms of clients to cluster assignments showing client's heterogeneity class 
-
     Arguments:
-        
         df_results : DataFrame containing all parameters from the resulting csv files
-        
         title : The plot title. The image is saved in results/plots/histogram_' + title + '.png'
     """
     
     import matplotlib.pyplot as plt
-    import numpy as np 
-        
+    from matplotlib.patches import Patch
+    import numpy as np
+
+    # Unique values for heterogeneity_class and skew
     labels_heterogeneity = list(df_results['heterogeneity_class'].unique())
+    skew_values = list(df_results['skew'].unique())
+    
+    bar_width = bar_depth = 0.3
 
-    bar_width = bar_depth = 0.5
-
-    n_clusters =  len(get_clusters(df_results))
+    n_clusters = len(get_clusters(df_results))
     n_heterogeneities = len(labels_heterogeneity)
 
-    # bar coordinates lists
-    x_heterogeneities = np.repeat(list(range(n_heterogeneities)), n_clusters)  
-    y_clusters = [int(x) for x in get_clusters(df_results)] * n_heterogeneities   
-    z = [0]*len(x_heterogeneities) 
+    # Create a color map based on skew values
+    cmap = plt.get_cmap('tab10')  # Choosing a color map
+    color_map = {skew: cmap(i / len(skew_values)) for i, skew in enumerate(skew_values)}
 
-    # dimensions for each bar (note we use the z dimension for the number of clients)
-    dx = [bar_width] * len(x_heterogeneities) 
-    dy = [bar_depth] * len(y_clusters) 
-    dz_nclients = get_z_nclients(df_results, x_heterogeneities, y_clusters, labels_heterogeneity) 
-
+    # Set up the figure and axis
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
+    # Iterate over heterogeneity classes and clusters to create bars
+    for h_idx, heterogeneity_class in enumerate(labels_heterogeneity):
+        for cluster_id in get_clusters(df_results):
+            
+            # Filter data for the specific heterogeneity_class and cluster_id
+            filtered_data = df_results[
+                (df_results['heterogeneity_class'] == heterogeneity_class) & 
+                (df_results['cluster_id'] == cluster_id)
+            ]
+            
+            # If there's no data for this combination, skip
+            if filtered_data.empty:
+                continue
+
+            # Initialize the bottom of the stack
+            z_bottom = 0
+            
+            # Iterate over each skew value
+            for skew in skew_values:
+                # Count the number of clients for this skew value
+                count = len(filtered_data[filtered_data['skew'] == skew])
+                
+                if count > 0:
+                    # Coordinates for the current segment
+                    x = h_idx
+                    y = int(cluster_id)
+                    dx = bar_width
+                    dy = bar_depth
+                    dz = count  # Height of the current segment
+                    
+                    # Draw the segment
+                    ax.bar3d(x, y, z_bottom, dx, dy, dz, color=color_map[skew])
+                    
+                    # Update the bottom for the next segment
+                    z_bottom += dz
+
+    # Setting up ticks and labels
     list_clusters = [x for x in 'abcdefghijklmnopqrstuvwxyz'][:n_clusters]
 
     ticksy = np.arange(0.25, len(list_clusters), 1)
@@ -140,24 +173,24 @@ def plot_histogram_clusters(df_results: DataFrame, title : str) -> None:
     plt.xticks(ticksx, labels_heterogeneity)
     plt.yticks(ticksy, list_clusters)
 
-
     plt.ylabel('Cluster ID')
     plt.xlabel('Heterogeneity Class')
     
     ax.set_zlabel('Number of Clients')
     
-    cmap = plt.get_cmap('hsv')
-    colors = [cmap(i) for i in np.linspace(0, 1, len(x_heterogeneities))]
-
-    ax.bar3d(x_heterogeneities,y_clusters,z,dx,dy,dz_nclients, color=[colors[i] for i in x_heterogeneities])
-    
     plt.title(title, fontdict=None, loc='center', pad=None)
+    
+    # Create a legend for the color mapping
+    legend_patches = [Patch(color=color_map[skew], label=skew) for skew in skew_values]
+    plt.legend(handles=legend_patches, title="Skew", loc='upper right', bbox_to_anchor=(1.15, 1))
     
     plt.savefig('results/plots/histogram_' + title + '.png')
     
     plt.close()
 
     return
+
+
 
 
 def normalize_results(results_accuracy : float, results_std : float) -> int:

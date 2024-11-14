@@ -299,16 +299,18 @@ def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
     """
     dict_params = {}
 
-    if heterogeneity_type == 'labels-distribution-skew':
+    if 'labels-distribution-skew' in heterogeneity_type :
         dict_params['skews'] = [[0,3,4,5,6,7,8,9], [0,1,2,5,6,7,8,9], [0,1,2,3,4,7,8,9], [0,1,2,3,4,5,6,9]]
         dict_params['ratios'] = [[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1], [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1], [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
                                [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]]
     
-    elif heterogeneity_type == 'concept-shift-on-labels':
+    elif 'concept-shift-on-labels' in heterogeneity_type :
         dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8),(5,6),(7,9)]
 
-    elif heterogeneity_type == 'quantity-skew':
+    elif 'quantity-skew' in heterogeneity_type :
         dict_params['skews'] = [0.1,0.2,0.6,1]
+    
+
 
     return dict_params
     
@@ -396,6 +398,17 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     elif row_exp['heterogeneity_type'] == "features-distribution-skew": #change image qualities
         list_clients = apply_features_skew(list_clients, row_exp)
     
+    elif row_exp['heterogeneity_type'] == "quantity-skew+concept-shift-on-features":
+        list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2]) 
+        list_clients = apply_rotation(list_clients, row_exp)
+    elif row_exp['heterogeneity_type'] == "quantity-skew+concept-shift-on-labels":
+        list_clients = apply_quantity_skew(list_clients, row_exp, [0.1,0.2,0.6,1]) 
+        list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
+    elif row_exp['heterogeneity_type'] == "quantity-skew+features-distribution-skew":
+        list_clients = apply_quantity_skew(list_clients, row_exp, [0.1,0.2,0.6,1]) 
+        list_clients = apply_features_skew(list_clients, row_exp)
+
+
     return list_clients
 
 
@@ -467,7 +480,6 @@ def apply_rotation(list_clients : list, row_exp : dict) -> list:
             rotate_images(client , rotation_angle)
             
             data_preparation(client, row_exp)
-            
             setattr(client,'heterogeneity_class', f"rot_{rotation_angle}")
 
         list_clients[start_index:end_index] = list_clients_rotated
@@ -504,8 +516,7 @@ def apply_labels_skew(list_clients : list, row_exp : dict, list_skews : list, li
             unbalancing(client, list_skews[i], list_ratios[i])
             
             data_preparation(client, row_exp)
-
-            setattr(client,'heterogeneity_class', f"lbl_skew_{str(i)}")
+            setattr(client,'skew', f"lbl_skew_{str(i)}")
 
         list_clients[start_index:end_index] = list_clients_skewed
     
@@ -515,7 +526,7 @@ def apply_labels_skew(list_clients : list, row_exp : dict, list_skews : list, li
 
 
 
-def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list) -> list:
+def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,type = 1 ) -> list:
     
     """ Utility function to apply quantity skew to Clients' data 
      For each element in list_skews, apply the skew to an equal subset of Clients 
@@ -525,6 +536,7 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list) 
         list_clients : List of Client Objects with specific heterogeneity_class 
         row_exp : The current experiment's global parameters
         list_skew : List of float 0 < i < 1  with quantity skews to subsample data
+        type : Type of quantity skew
     
     Returns:
         Updated list of clients
@@ -541,14 +553,20 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list) 
                                     row_exp['nn_model']) 
                                     for skew in list_skews] 
     list_clients = []
+    if type == 1 :
+        for c in range(n_clients_by_skew):
 
-    for c in range(n_clients_by_skew):
-
+            for s in range(len(list_skews)):
+                
+                client = Client(c * len(list_skews)+ s, dict_clients[s][c])
+                setattr(client,'skew', "qt-skew_"+ str(list_skews[s]))
+                list_clients.append(client)
+    if type == 2 :
         for s in range(len(list_skews)):
-            
-            client = Client(c * len(list_skews)+ s, dict_clients[s][c])
-            setattr(client,'heterogeneity_class', str(s))
-            list_clients.append(client)
+            for c in range(n_clients_by_skew):
+                client = Client(c * len(list_skews)+ s, dict_clients[s][c])
+                setattr(client,'skew', "qt-skew_"+ str(list_skews[s]))
+                list_clients.append(client)
 
     for client in list_clients :
 
@@ -584,12 +602,11 @@ def apply_features_skew(list_clients : list, row_exp : dict) -> list :
         for client in list_clients_rotated:
             if client.id % n_skew_types == 1:
                 client.data['x'] = erode_images(client.data['x'])
-                client.heterogeneity_class = 'erosion'
-
+                client.heterogeneity_class = 'erosion' 
+                
             elif client.id % n_skew_types == 2 :
                 client.data['x'] = dilate_images(client.data['x'])
-                client.heterogeneity_class = 'dilatation'
-
+                client.heterogeneity_class = 'dilatation' 
             else :
                 client.heterogeneity_class = 'none'
 
@@ -603,7 +620,7 @@ def apply_features_skew(list_clients : list, row_exp : dict) -> list :
 
 
 
-def swap_labels(labels : list, client : Client, heterogeneity_class : int) -> Client:
+def swap_labels(labels : list, client : Client, heterogeneity : int) -> Client:
 
     """ Utility Function for label swapping used for concept shift on labels. Sets the attribute "heterogeneity class"
     
@@ -623,9 +640,7 @@ def swap_labels(labels : list, client : Client, heterogeneity_class : int) -> Cl
     newlabellist[otherlabelindex] = labels[0]
 
     client.data['y']= newlabellist
-
-    setattr(client,'heterogeneity_class', heterogeneity_class)
-
+    client.heterogeneity_class = client.heterogeneity_class + heterogeneity
     return client
 
 

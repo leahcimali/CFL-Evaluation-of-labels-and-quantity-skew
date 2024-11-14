@@ -1,4 +1,5 @@
 import os
+import traceback
 
 # Set the environment variable for deterministic behavior with CuBLAS (Give reproductibility with CUDA) 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -50,12 +51,14 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, num_clients, nu
     except Exception as e:
 
         print(f"Could not run experiment with parameters {output_name}. Exception {e}")
+        print("Exception details:")
+        traceback.print_exc()  # This will print the full traceback
+
         return 
     
     launch_experiment(model_server, list_clients, row_exp, output_name)
 
     return          
-            
 
 
 def launch_experiment(model_server, list_clients, row_exp, output_name, save_results = True):

@@ -11,6 +11,7 @@ import click
 @click.option('--dataset')
 @click.option('--nn_model', help= "The training model to use ('linear (default) or 'convolutional')")
 @click.option('--heterogeneity_type', help="The data heterogeneity to test (or dataset)")
+@click.option('--skew', help="Type of skew applied to experiment")
 @click.option('--num_clients', type=int)
 @click.option('--num_samples_by_label', type=int)
 @click.option('--num_clusters', type=int)
@@ -19,14 +20,14 @@ import click
 @click.option('--seed', type=int)
 
 
-def main_driver(exp_type, dataset, nn_model, heterogeneity_type, num_clients, num_samples_by_label, num_clusters, centralized_epochs, federated_rounds, seed):
+def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clients, num_samples_by_label, num_clusters, centralized_epochs, federated_rounds, seed):
 
     from pathlib import Path
     import pandas as pd
 
     from src.utils_data import setup_experiment, get_uid 
 
-    row_exp = pd.Series({"exp_type": exp_type, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "num_clients": num_clients,
+    row_exp = pd.Series({"exp_type": exp_type, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
                "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "centralized_epochs": centralized_epochs,
                "federated_rounds": federated_rounds, "seed": seed})
     

@@ -300,9 +300,12 @@ def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
     dict_params = {}
 
     if 'labels-distribution-skew' in heterogeneity_type :
-        dict_params['skews'] = [[0,3,4,5,6,7,8,9], [0,1,2,5,6,7,8,9], [0,1,2,3,4,7,8,9], [0,1,2,3,4,5,6,9]]
-        dict_params['ratios'] = [[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1], [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1], [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],
-                               [0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1],[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]]
+        dict_params['ratios'] = [
+    [0.05, 0.2875, 0.525, 0.7625, 0.95, 0.7625, 0.525, 0.2875, 0.10,0.05],  # Normal distribution
+    [0.95, 0.7125, 0.475, 0.2375, 0.05, 0.1, 0.2375, 0.475, 0.7125, 0.95],  # Complementary to normal distribution
+    [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],       # Left-skewed distribution
+    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]        # Right-skewed distribution
+    ]
     
     elif 'concept-shift-on-labels' in heterogeneity_type :
         dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8),(5,6),(7,9)]
@@ -381,32 +384,46 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     """
 
     dict_params = get_dataset_heterogeneities(row_exp['heterogeneity_type'])
-
+    
     if row_exp['heterogeneity_type']  == "concept-shift-on-features": # rotations
+        if row_exp['skew'] == "quantity-skew-type-1":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
+        elif row_exp['skew'] == "quantity-skew-type-2":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
         list_clients = apply_rotation(list_clients, row_exp)
-    
+        if row_exp['skew'] == "label-skew":
+            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
+                                          dict_params['ratios'])
+        
     elif row_exp['heterogeneity_type'] == "concept-shift-on-labels": #label swaps
+        if row_exp['skew'] == "quantity-skew-type-1":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
+        elif row_exp['skes'] == "quantity-skew-type-2":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
+        
         list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
-    
-    elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
-        list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
+        if row_exp['skew'] == "label-skew":
+            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
+                                          dict_params['ratios'])
+    elif row_exp['heterogeneity_type'] == "features-distribution-skew": #change image qualities
+        if row_exp['skew'] == "quantity-skew-type-1":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
+        elif row_exp['skew'] == "quantity-skew-type-2":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
+        
+        list_clients = apply_features_skew(list_clients, row_exp)
+        if row_exp['skew'] == "label-skew":
+            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
+                                          dict_params['ratios'])
     
     elif row_exp['heterogeneity_type'] == "labels-distribution-skew":
         list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
                                           dict_params['ratios'])
-    
-    elif row_exp['heterogeneity_type'] == "features-distribution-skew": #change image qualities
-        list_clients = apply_features_skew(list_clients, row_exp)
-    
-    elif row_exp['heterogeneity_type'] == "quantity-skew+concept-shift-on-features":
-        list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2]) 
-        list_clients = apply_rotation(list_clients, row_exp)
-    elif row_exp['heterogeneity_type'] == "quantity-skew+concept-shift-on-labels":
-        list_clients = apply_quantity_skew(list_clients, row_exp, [0.1,0.2,0.6,1]) 
-        list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
-    elif row_exp['heterogeneity_type'] == "quantity-skew+features-distribution-skew":
-        list_clients = apply_quantity_skew(list_clients, row_exp, [0.1,0.2,0.6,1]) 
-        list_clients = apply_features_skew(list_clients, row_exp)
+    elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
+        list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
 
 
     return list_clients
@@ -489,44 +506,58 @@ def apply_rotation(list_clients : list, row_exp : dict) -> list:
     return list_clients
 
 
-def apply_labels_skew(list_clients : list, row_exp : dict, list_skews : list, list_ratios : list) -> list:
-    
-    """ Utility function to apply label skew to Clients' data 
+def apply_labels_skew(list_clients : list, row_exp : dict, list_ratios : list) -> list:
+    """ 
+    Utility function to apply label skew to Clients' data, ensuring equal distribution across heterogeneity classes.
 
     Arguments:
         list_clients : List of Client Objects with specific heterogeneity_class 
         row_exp : The current experiment's global parameters
     
     Returns:
-        Updated list of clients
+        Updated list of clients with applied label skew
     """
-
-    n_skews = len(list_skews)
-    n_clients_by_skew = row_exp['num_clients'] // n_skews 
-
-    for i in range(n_skews):
-
-        start_index = i * n_clients_by_skew
-        end_index = (i + 1) * n_clients_by_skew
-
-        list_clients_skewed = list_clients[start_index:end_index]
-
-        for client in list_clients_skewed:
-            
-            unbalancing(client, list_skews[i], list_ratios[i])
-            
-            data_preparation(client, row_exp)
-            setattr(client,'skew', f"lbl_skew_{str(i)}")
-
-        list_clients[start_index:end_index] = list_clients_skewed
+    # Get unique heterogeneity classes
+    heterogeneity_set = set([client.heterogeneity_class for client in list_clients])
     
-    list_clients = list_clients[:end_index]
+    # Number of skews and clients per skew
+    n_skews = len(list_ratios)
+    
+    # Number of clients per skew in each heterogeneity class
+    clients_per_heterogeneity_class = row_exp['num_clients'] // len(heterogeneity_set)
+    n_clients_by_skew = clients_per_heterogeneity_class // n_skews
 
+    # Iterate over heterogeneity classes
+    for heterogeneity_class in heterogeneity_set:
+        # Filter clients by heterogeneity class
+        clients_in_class = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
+        
+        # Apply skew to each set of clients in this heterogeneity class
+        for i in range(n_skews):
+            # Determine the indices for the clients in the current skew
+            start_index = i * n_clients_by_skew
+            end_index = (i + 1) * n_clients_by_skew
+
+            # Get the clients that will receive the current skew
+            list_clients_skewed = clients_in_class[start_index:end_index]
+
+            # Apply the skew to each client
+            for client in list_clients_skewed:
+                unbalancing(client, list_ratios[i])
+                data_preparation(client, row_exp)
+                setattr(client, 'skew', f"lbl_skew_{str(i)}")
+
+            # Update the clients list with the skewed clients
+            for j, client in enumerate(list_clients_skewed):
+                # Find the original index and replace the client
+                original_index = list_clients.index(client)
+                list_clients[original_index] = client
+    
     return list_clients
 
 
 
-def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,type = 1 ) -> list:
+def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,skew_type = 1 ) -> list:
     
     """ Utility function to apply quantity skew to Clients' data 
      For each element in list_skews, apply the skew to an equal subset of Clients 
@@ -553,19 +584,17 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,t
                                     row_exp['nn_model']) 
                                     for skew in list_skews] 
     list_clients = []
-    if type == 1 :
+    if skew_type == 1 :
         for c in range(n_clients_by_skew):
-
             for s in range(len(list_skews)):
-                
                 client = Client(c * len(list_skews)+ s, dict_clients[s][c])
-                setattr(client,'skew', "qt-skew_"+ str(list_skews[s]))
+                setattr(client,"skew", "qt-skew_"+ str(list_skews[s]))
                 list_clients.append(client)
-    if type == 2 :
+    if skew_type == 2 :
         for s in range(len(list_skews)):
             for c in range(n_clients_by_skew):
                 client = Client(c * len(list_skews)+ s, dict_clients[s][c])
-                setattr(client,'skew', "qt-skew_"+ str(list_skews[s]))
+                setattr(client,"skew", "qt-skew_"+ str(list_skews[s]))
                 list_clients.append(client)
 
     for client in list_clients :
@@ -692,14 +721,12 @@ def centralize_data(list_clients: list, row_exp: dict) -> Tuple[DataLoader, Data
 
 
 
-def unbalancing(client : Client ,labels_list : list ,ratio_list: list) -> Client :
-    
-    """ Downsample the dataset of a client with each elements of the labels_list will be downsampled by the corresponding ration of ratio_list
+def unbalancing(client: Client, ratio_list: list) -> Client:
+    """ Downsample the dataset of a client using the ratios provided for each label.
 
     Arguments: 
         client : Client whose dataset we want to downsample
-        labels_list : Labels to downsample in the Client's dataset
-        ratio_list : Ratios to use for downsampling the labels
+        ratio_list : Ratios to use for downsampling each label (from 0 to 9)
     """
     
     import pandas as pd
@@ -707,36 +734,38 @@ def unbalancing(client : Client ,labels_list : list ,ratio_list: list) -> Client
     from math import prod
 
     def ratio_func(y, multiplier, minority_class):
-    
         from collections import Counter
-    
         target_stats = Counter(y)
         return {minority_class: int(multiplier * target_stats[minority_class])}
-
 
     x_train = client.data['x']
     y_train = client.data['y']
     
     orig_shape = x_train.shape
     
-     # flatten the images 
+    # Flatten the images
     X_resampled = x_train.reshape(-1, prod(orig_shape[1:]))
     y_resampled = y_train
     
-    for i in range(len(labels_list)):
+    # Ensure ratio_list has exactly 10 elements (for labels 0 to 9)
+    if len(ratio_list) != 10:
+        raise ValueError("The ratio_list must have exactly 10 elements, one for each label.")
     
+    # Loop over labels from 0 to 9
+    for i in range(10):  # Iterating through each label from 0 to 9
         X = pd.DataFrame(X_resampled)
-    
-        X_resampled, y_resampled = make_imbalance(X,
-                y_resampled,
-                sampling_strategy=ratio_func,
-                **{"multiplier": ratio_list[i], "minority_class": labels_list[i]})
+        
+        X_resampled, y_resampled = make_imbalance(
+            X,
+            y_resampled,
+            sampling_strategy=ratio_func,
+            **{"multiplier": ratio_list[i], "minority_class": i}
+        )
 
     client.data['x'] = X_resampled.to_numpy().reshape(-1, *orig_shape[1:])
     client.data['y'] = y_resampled
     
     return client
-
 
 def dilate_images(x_train : ndarray, kernel_size : tuple = (3, 3)) -> ndarray:
     

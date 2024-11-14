@@ -308,7 +308,7 @@ def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
     ]
     
     elif 'concept-shift-on-labels' in heterogeneity_type :
-        dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8),(5,6),(7,9)]
+        dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8)]
 
     elif 'quantity-skew' in heterogeneity_type :
         dict_params['skews'] = [0.1,0.2,0.6,1]
@@ -617,7 +617,7 @@ def apply_features_skew(list_clients : list, row_exp : dict) -> list :
         Updated list of clients
     """
     
-    n_skew_types = 3 #TODO parameterize
+    n_skew_types = 4 #TODO parameterize
     
     n_clients_by_skew = row_exp['num_clients'] // n_skew_types  
     
@@ -626,9 +626,9 @@ def apply_features_skew(list_clients : list, row_exp : dict) -> list :
         start_index = i * n_clients_by_skew
         end_index = (i + 1) * n_clients_by_skew
 
-        list_clients_rotated = list_clients[start_index:end_index]
+        list_clients_erode = list_clients[start_index:end_index]
 
-        for client in list_clients_rotated:
+        for client in list_clients_erode:
             if client.id % n_skew_types == 1:
                 client.data['x'] = erode_images(client.data['x'])
                 client.heterogeneity_class = 'erosion' 
@@ -636,12 +636,15 @@ def apply_features_skew(list_clients : list, row_exp : dict) -> list :
             elif client.id % n_skew_types == 2 :
                 client.data['x'] = dilate_images(client.data['x'])
                 client.heterogeneity_class = 'dilatation' 
+            elif client.id % n_skew_types == 3 :
+                client.data['x'] = dilate_images(client.data['x'],kernel_size=(8,8))
+                client.heterogeneity_class = 'big_dilatation'     
             else :
                 client.heterogeneity_class = 'none'
 
             data_preparation(client, row_exp)
 
-        list_clients[start_index:end_index] = list_clients_rotated
+        list_clients[start_index:end_index] = list_clients_erode
     
     list_clients = list_clients[:end_index]
     

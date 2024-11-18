@@ -384,7 +384,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     """
 
     dict_params = get_dataset_heterogeneities(row_exp['heterogeneity_type'])
-    
+    # Concept shift on features
     if row_exp['heterogeneity_type']  == "concept-shift-on-features": # rotations
         if row_exp['skew'] == "quantity-skew-type-1":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
@@ -395,18 +395,19 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
-        
+    # Concept shift on labels    
     elif row_exp['heterogeneity_type'] == "concept-shift-on-labels": #label swaps
         if row_exp['skew'] == "quantity-skew-type-1":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
-        elif row_exp['skes'] == "quantity-skew-type-2":
+        elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
         
         list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
-            list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
+            list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
+    # Features distribution skew        
     elif row_exp['heterogeneity_type'] == "features-distribution-skew": #change image qualities
         if row_exp['skew'] == "quantity-skew-type-1":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
@@ -416,12 +417,13 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         list_clients = apply_features_skew(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
-            list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
+            list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
-    
+    # Labels distribution skew
     elif row_exp['heterogeneity_type'] == "labels-distribution-skew":
         list_clients = apply_labels_skew(list_clients, row_exp, dict_params['skews'], # less images of certain labels
                                           dict_params['ratios'])
+    # Quantity skew
     elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
         list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
 
@@ -455,7 +457,7 @@ def apply_label_swap(list_clients : list, row_exp : dict, list_swaps : list) -> 
 
         for client in list_clients_swapped:
             
-            client = swap_labels(list_swaps[i],client, str(i))
+            client = swap_labels(list_swaps[i],client, str(list_swaps[i]))
             
             data_preparation(client, row_exp)
 
@@ -605,51 +607,43 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,s
 
 
 
-def apply_features_skew(list_clients : list, row_exp : dict) -> list :
-    
-    """ Utility function to apply features skew to Clients' data 
+def apply_features_skew(list_clients: list, row_exp: dict) -> list:
+    """
+    Utility function to apply feature skew to Clients' data.
 
     Arguments:
-        list_clients : List of Client Objects with specific heterogeneity_class 
-        row_exp : The current experiment's global parameters
+        list_clients: List of Client Objects with specific heterogeneity_class.
+        row_exp: The current experiment's global parameters.
     
     Returns:
-        Updated list of clients
+        Updated list of clients.
     """
-    
-    n_skew_types = 4 #TODO parameterize
-    
-    n_clients_by_skew = row_exp['num_clients'] // n_skew_types  
-    
-    for i in range(n_skew_types):
+    n_skew_types = 4  # Number of skew types (erosion, dilatation, none, big dilatation)
+    n_clients = len(list_clients)
+    n_clients_by_skew = n_clients // n_skew_types
 
+    # Loop over skew types and apply corresponding transformations
+    for i, skew_type in enumerate(['erosion', 'dilatation', 'none', 'big_dilatation']):
         start_index = i * n_clients_by_skew
-        end_index = (i + 1) * n_clients_by_skew
+        end_index = (i + 1) * n_clients_by_skew if i < n_skew_types - 1 else n_clients
 
-        list_clients_erode = list_clients[start_index:end_index]
-
-        for client in list_clients_erode:
-            if client.id % n_skew_types == 1:
+        for client in list_clients[start_index:end_index]:
+            if skew_type == 'erosion':
                 client.data['x'] = erode_images(client.data['x'])
-                client.heterogeneity_class = 'erosion' 
-                
-            elif client.id % n_skew_types == 2 :
+                client.heterogeneity_class = 'erosion'
+            elif skew_type == 'dilatation':
                 client.data['x'] = dilate_images(client.data['x'])
-                client.heterogeneity_class = 'dilatation' 
-            elif client.id % n_skew_types == 3 :
-                client.data['x'] = dilate_images(client.data['x'],kernel_size=(8,8))
-                client.heterogeneity_class = 'big_dilatation'     
-            else :
+                client.heterogeneity_class = 'dilatation'
+            elif skew_type == 'big_dilatation':
+                client.data['x'] = dilate_images(client.data['x'], kernel_size=(8, 8))
+                client.heterogeneity_class = 'big_dilatation'
+            else: 
                 client.heterogeneity_class = 'none'
-
+            
+            # Prepare client data for further processing
             data_preparation(client, row_exp)
 
-        list_clients[start_index:end_index] = list_clients_erode
-    
-    list_clients = list_clients[:end_index]
-    
     return list_clients
-
 
 
 def swap_labels(labels : list, client : Client, heterogeneity : int) -> Client:
@@ -672,7 +666,7 @@ def swap_labels(labels : list, client : Client, heterogeneity : int) -> Client:
     newlabellist[otherlabelindex] = labels[0]
 
     client.data['y']= newlabellist
-    client.heterogeneity_class = client.heterogeneity_class + heterogeneity
+    client.heterogeneity_class = heterogeneity
     return client
 
 

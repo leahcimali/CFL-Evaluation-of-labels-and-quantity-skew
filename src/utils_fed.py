@@ -2,6 +2,7 @@ from src.fedclass import Server
 import torch
 import torch.nn as nn
 import pandas as pd
+import numpy as np
 from torch.utils.data import DataLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -136,53 +137,98 @@ def model_weight_matrix(list_clients : list) -> pd.DataFrame:
     return weight_matrix
 
 
-def k_means_cluster_id(weight_matrix : pd.DataFrame, k : int, seed : int) -> pd.Series: 
-    
-    """ Define cluster identites using k-means
-
-    Args : 
-        weight_matrix:  Weight matrix of all federated models
-        k: K-means parameter
-        seed : Random seed to allow reproducibility
-        
-    Returns:
-        Pandas Serie with cluster identity of each model
-    """
-    
-    from sklearn.cluster import KMeans
-    
-    kmeans = KMeans(n_clusters=k, random_state=seed)
-    kmeans.fit(weight_matrix)
-
-    weight_matrix['cluster'] = kmeans.labels_
-
-    clusters_identities = weight_matrix['cluster']
-
-    return clusters_identities
-
-
 def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> None:
-
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
         list_clients : List of Clients on which to perform clustering
         num_clusters : Parameter to set the number of clusters needed
         seed : Random seed to allow reproducibility
-        
     """ 
-
+    from sklearn.cluster import KMeans
+    
     weight_matrix = model_weight_matrix(list_clients)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
+    kmeans.fit(weight_matrix)
 
-    clusters_identities = k_means_cluster_id(weight_matrix, num_clusters, seed)
+    weight_matrix['cluster'] = kmeans.labels_
 
+    clusters_identities = weight_matrix['cluster']
+    
     for client in list_clients : 
 
         setattr(client, 'cluster_id',clusters_identities[client.id])
     
-    return  
+    return 
 
 
+def calculate_data_driven_measure(pm : np.ndarray) -> np.ndarray:
+    ''' Used in the calculation of MADD. Credit -> Adapted from https://github.com/morningD/FlexCFL
+    
+    Arguments:
+        pm : proximity matrix, usually cosine similarity matrix of local models weights 
+    '''
+    # pm.shape=(n_clients, n_dims), dm.shape=(n_clients, n_clients)
+    n_clients, n_dims = pm.shape[0], pm.shape[1]
+    dm = np.zeros(shape=(n_clients, n_clients))
+    
+
+    row_pm_matrix = np.repeat(pm[:,np.newaxis,:], n_clients, axis=1)
+ 
+    col_pm_matrix = np.tile(pm, (n_clients, 1, 1))
+    absdiff_pm_matrix = np.abs(col_pm_matrix - row_pm_matrix) # shape=(n_clients, n_clients, n_clients)
+    # Calculate the sum of absolute differences
+    
+    # We should mask these values like sim(1,2), sim(2,1) in d(1,2)
+    mask = np.zeros(shape=(n_clients, n_clients))
+    np.fill_diagonal(mask, 1) # Mask all diag
+    mask = np.repeat(mask[np.newaxis,:,:], n_clients, axis=0)
+    for idx in range(mask.shape[-1]):
+        #mask[idx,idx,:] = 1 # Mask all row d(1,1), d(2,2)...; Actually d(1,1)=d(2,2)=0
+        mask[idx,:,idx] = 1 # Mask all 0->n colum for 0->n diff matrix,
+    #difference matrix
+    dm = np.sum(np.ma.array(absdiff_pm_matrix, mask=mask), axis=-1) / (n_dims-2.0)
+
+    return dm # shape=(n_clients, n_clients)
+
+def MADC(weight_matrix : pd.DataFrame) : 
+    """Calculate the MADC (Mean Absolute difference of pairwise cosine similarity)
+    
+    Arguments:
+        weight_matrix : weight matrix DataFrame using the weights of local federated models
+    """
+    from sklearn.metrics.pairwise import cosine_similarity
+    cossim_matrix = cosine_similarity(weight_matrix)
+    affinity_matrix = calculate_data_driven_measure(cossim_matrix, correction=True)
+    return affinity_matrix
+
+def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering_metric :str, linkage_type : str, seed : int) -> None:
+    """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
+    
+    Arguments:
+        list_clients : List of Clients on which to perform clustering
+        num_clusters : Parameter to set the number of clusters needed
+        clustering_metric : Specify the used metric, choose from 'euclidean', 'cosine' and MADC 
+        linkage_type : Specify the linkage type, choosen from ward, complete, average ans single
+        seed : Random seed to allow reproducibility        
+    """ 
+    from sklearn.cluster import AgglomerativeClustering
+
+    weight_matrix = model_weight_matrix(list_clients)
+    if clustering_metric == 'MADC': 
+        affinity_matrix = MADC(weight_matrix)
+        ac = AgglomerativeClustering(num_clusters, affinity='precomputed', linkage=linkage_type).fit(affinity_matrix)
+    else: 
+        ac = AgglomerativeClustering(n_clusters=num_clusters,metric=clustering_metric,linkage=linkage_type)
+    
+    ac.fit(weight_matrix)
+    
+    weight_matrix['cluster'] = ac.labels_
+    
+    clusters_identities = weight_matrix['cluster']
+    for client in list_clients : 
+        setattr(client, 'cluster_id',clusters_identities[client.id])
+    return      
 
 def init_server_cluster(my_server : Server, list_clients : list, row_exp : dict, imgs_params: dict, p_expert_opinion : float = 0) -> None:
     

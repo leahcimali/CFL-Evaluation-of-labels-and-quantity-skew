@@ -160,7 +160,7 @@ def plot_histogram_clusters(df_results: DataFrame, title: str) -> None:
                     
                     # Draw the segment
                     ax.bar3d(x, y, z_bottom, dx, dy, dz, color=color_map[skew])
-                    
+                    ax.view_init(elev=50)  # Change elev and azim for rotation
                     # Update the bottom for the next segment
                     z_bottom += dz
 

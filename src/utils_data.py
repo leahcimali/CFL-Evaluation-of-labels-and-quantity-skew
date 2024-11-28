@@ -390,6 +390,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
         elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
+        # if skew as value none or other value will not apply skewness
         list_clients = apply_rotation(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
@@ -401,7 +402,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
         elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
-        
+        # if skew as value none or other value will not apply skewness
         list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
@@ -413,7 +414,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
         elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
-        
+        # if skew as value none or other value will not apply skewness
         list_clients = apply_features_skew(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    

@@ -10,7 +10,7 @@ from src.fedclass import Server
 
 
 
-def run_cfl_server_side(model_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
+def run_cfl_server_side(model_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean') -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights (k-means).
@@ -20,13 +20,15 @@ def run_cfl_server_side(model_server : Server, list_clients : list, row_exp : di
         main_model : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
+        algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
+        clustering_metric : euclidean, cosine or MADC
 
     Returns:
 
         df_results : dataframe with the experiment results
     """
 
-    from src.utils_fed import k_means_clustering
+    from src.utils_fed import k_means_clustering, Agglomerative_Clustering
     import copy
     import torch 
 
@@ -36,8 +38,11 @@ def run_cfl_server_side(model_server : Server, list_clients : list, row_exp : di
     model_server.clusters_models= {cluster_id: copy.deepcopy(model_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(model_server, 'num_clusters', row_exp['num_clusters'])
 
-    k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
-
+    if algorithm != 'kmeans' :
+        Agglomerative_Clustering(list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+    else: 
+        k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
+    
     model_server = train_federated(model_server, list_clients, row_exp, use_cluster_models = True)
 
     for client in list_clients :

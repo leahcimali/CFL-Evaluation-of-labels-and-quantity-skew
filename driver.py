@@ -81,12 +81,18 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
 
             df_results = run_cfl_client_side(model_server, list_clients, row_exp)
             
-        elif row_exp['exp_type'] == "server":
+        elif row_exp['exp_type'].split('-')[0] == "server":
 
             print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
-
-            df_results = run_cfl_server_side(model_server, list_clients, row_exp)
+            # exp_type values should be server for Kmeans or 
+            # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
             
+            if len(row_exp['exp_type'].split('-')[0]) == 1 :
+                df_results = run_cfl_server_side(model_server, list_clients, row_exp)
+            else : 
+                algorithm = row_exp['exp_type'].split('-')[1]
+                clustering_metric = row_exp['exp_type'].split('-')[2]
+                df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm,clustering_metric)       
         else:
             
             str_exp_type = row_exp['exp_type']

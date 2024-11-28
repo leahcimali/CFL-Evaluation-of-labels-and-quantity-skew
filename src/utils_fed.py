@@ -163,8 +163,8 @@ def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> N
 
 
 def calculate_data_driven_measure(pm : np.ndarray) -> np.ndarray:
-    ''' Used in the calculation of MADD. Credit -> Adapted from https://github.com/morningD/FlexCFL
-    
+    ''' Used in the calculation of MADD. 
+    Credit -> Adapted from https://github.com/morningD/FlexCFL
     Arguments:
         pm : proximity matrix, usually cosine similarity matrix of local models weights 
     '''
@@ -199,10 +199,10 @@ def MADC(weight_matrix : pd.DataFrame) :
     """
     from sklearn.metrics.pairwise import cosine_similarity
     cossim_matrix = cosine_similarity(weight_matrix)
-    affinity_matrix = calculate_data_driven_measure(cossim_matrix, correction=True)
+    affinity_matrix = pd.DataFrame(calculate_data_driven_measure(cossim_matrix))
     return affinity_matrix
 
-def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering_metric :str, linkage_type : str, seed : int) -> None:
+def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
@@ -217,7 +217,8 @@ def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering
     weight_matrix = model_weight_matrix(list_clients)
     if clustering_metric == 'MADC': 
         affinity_matrix = MADC(weight_matrix)
-        ac = AgglomerativeClustering(num_clusters, affinity='precomputed', linkage=linkage_type).fit(affinity_matrix)
+        ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)
+        weight_matrix = affinity_matrix
     else: 
         ac = AgglomerativeClustering(n_clusters=num_clusters,metric=clustering_metric,linkage=linkage_type)
     

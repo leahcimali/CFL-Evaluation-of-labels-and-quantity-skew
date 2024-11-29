@@ -87,8 +87,10 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
             # exp_type values should be server for Kmeans or 
             # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
             if len(row_exp['exp_type'].split('-')) == 1 :
+                print('Using Kmeans Clustering!')
                 df_results = run_cfl_server_side(model_server, list_clients, row_exp)
             else : 
+                print('Using Agglomerative Clustering!')
                 algorithm = row_exp['exp_type'].split('-')[1]
                 clustering_metric = row_exp['exp_type'].split('-')[2]
                 df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm,clustering_metric)       

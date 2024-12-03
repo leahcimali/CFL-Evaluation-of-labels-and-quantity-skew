@@ -35,8 +35,8 @@ def group_cold_start(my_server : Server, list_clients : list, row_exp : dict, al
         Agglomerative_Clustering(selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
     else: 
         k_means_clustering(selected_clients, row_exp['num_clusters'], row_exp['seed'])
-    client_migration(my_server,unselected_clients)
     fedavg(my_server, selected_clients)
+    client_migration(my_server,unselected_clients)
 
     return
 

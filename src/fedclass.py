@@ -33,7 +33,7 @@ class Client:
         self.cluster_id = None
         self.heterogeneity_class = None
         self.accuracy = 0
-        self.skew = None
+        self.skew = 'none'
 
     def __eq__(self, value: object) -> bool:
         return (self.id == value.id and

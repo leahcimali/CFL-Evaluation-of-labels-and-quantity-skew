@@ -136,7 +136,28 @@ def model_weight_matrix(list_clients : list) -> pd.DataFrame:
 
     return weight_matrix
 
+def model_dissimilarity(client : list, server_model : list) :
+    from sklearn.metrics.pairwise import cosine_similarity
+    server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0)
+    client_weights = torch.cat([param.detach().flatten() for param in client.model.parameters()]).unsqueeze(0)
+    
+    return (1-cosine_similarity(server_weights,client_weights)) / 2
 
+def client_migration(my_server,client_list):
+    for client in client_list :
+        client_server_dissimilarity = [(cluster_id,model_dissimilarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
+        dissimilarity_values = [dissimilarity for _, dissimilarity in client_server_dissimilarity]
+
+        #Find the index of the minimum dissimilarity
+        min_index = np.argmin(dissimilarity_values)
+
+        # Use the index to get the corresponding cluster_id
+        min_cluster_id, _ = client_server_dissimilarity[min_index]
+
+        # Update the client with the corresponding model and cluster_id
+        client.model = my_server.clusters_models[min_cluster_id]
+        client.cluster_id = min_cluster_id
+            
 def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
@@ -152,7 +173,7 @@ def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> N
     kmeans.fit(weight_matrix)
 
     weight_matrix['cluster'] = kmeans.labels_
-
+    weight_matrix.index = [client.id for client in list_clients]
     clusters_identities = weight_matrix['cluster']
     
     for client in list_clients : 
@@ -225,7 +246,7 @@ def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering
     ac.fit(weight_matrix)
     
     weight_matrix['cluster'] = ac.labels_
-    
+    weight_matrix.index = [client.id for client in list_clients]
     clusters_identities = weight_matrix['cluster']
     for client in list_clients : 
         setattr(client, 'cluster_id',clusters_identities[client.id])

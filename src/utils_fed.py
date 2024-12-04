@@ -42,7 +42,7 @@ def send_cluster_models_to_clients(list_clients : list , my_server : Server) -> 
     return 
 
 
-def model_avg(list_clients : list) -> nn.Module:
+def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
     
     """  Utility function for the fed_avg function which creates a new model
          with weights set to the weighted average of 
@@ -69,8 +69,10 @@ def model_avg(list_clients : list) -> nn.Module:
         for client in list_clients:
 
             data_size = len(client.data_loader['train'].dataset)
-
-            weight = data_size / total_data_size            
+            if ponderation :
+                weight = data_size / total_data_size            
+            else :
+                weight = 1/ len(list_clients)
             weighted_avg_param += client.model.state_dict()[name] * weight
 
         param.data = weighted_avg_param #TODO: make more explicit
@@ -78,7 +80,7 @@ def model_avg(list_clients : list) -> nn.Module:
     return new_model
     
     
-def fedavg(my_server : Server, list_clients : list) -> None:
+def fedavg(my_server : Server, list_clients : list, ponderation : bool = True) -> None:
     """
     Implementation of the (Clustered) federated aggregation algorithm with one model per cluster. 
     The code modifies the cluster models `my_server.cluster_models[i]'
@@ -86,13 +88,12 @@ def fedavg(my_server : Server, list_clients : list) -> None:
     
     Arguments:
         my_server : Server model which contains the cluster models
-
         list_clients: List of clients, each containing a PyTorch model and a data loader.
-
+        ponderation : If ponderation is True will pondated weight by quantity of data.
     """
     if my_server.num_clusters == None:
 
-        my_server.model = model_avg(list_clients)
+        my_server.model = model_avg(list_clients,ponderation)
     
     else : 
          
@@ -102,7 +103,7 @@ def fedavg(my_server : Server, list_clients : list) -> None:
             
             if len(cluster_clients_list)>0 :  
           
-                my_server.clusters_models[cluster_id] = model_avg(cluster_clients_list)
+                my_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderation)
     return
 
 

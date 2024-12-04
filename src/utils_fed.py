@@ -139,10 +139,10 @@ def model_weight_matrix(list_clients : list) -> pd.DataFrame:
 
 def model_dissimilarity(client : list, server_model : list) :
     from sklearn.metrics.pairwise import cosine_similarity
-    server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0)
-    client_weights = torch.cat([param.detach().flatten() for param in client.model.parameters()]).unsqueeze(0)
+    server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0).cpu()
+    client_weights = torch.cat([param.detach().flatten() for param in client.model.parameters()]).unsqueeze(0).cpu()
     
-    return (1-cosine_similarity(server_weights,client_weights)) / 2
+    return (1 - cosine_similarity(server_weights.numpy(), client_weights.numpy())) / 2
 
 def client_migration(my_server,client_list):
     for client in client_list :

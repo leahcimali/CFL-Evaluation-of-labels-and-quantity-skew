@@ -201,7 +201,7 @@ def data_transformation(row_exp : dict)-> tuple:
         train_transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(20),
+            #transforms.RandomRotation(20),
             transforms.RandomCrop(32, padding=4),
             transforms.ToTensor(),  # Convert to tensor
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))

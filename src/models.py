@@ -48,7 +48,7 @@ class GenericLinearModel(ImageClassificationBase):
     def forward(self, xb):
         xb = xb.view(-1, self.in_size * self.in_size)
         return self.network(xb)
-
+'''
 class GenericConvModel(ImageClassificationBase):
     def __init__(self, in_size, n_channels):
         super().__init__()
@@ -89,9 +89,46 @@ class GenericConvModel(ImageClassificationBase):
             nn.ReLU(),
             nn.Linear(512, 10)
         )
-        
+
     def forward(self, xb):
         x = self.network[:-3](xb)  # Pass through the Conv layers
         self.img_final_size = x.shape[-1]  # Get dynamic size after Conv layers
         x = self.network[-3:](x.view(x.size(0), -1))  # Flatten and pass through FC layers
         return x
+'''
+
+# Credit : https://github.com/Moddy2024/ResNet-9/blob/main/resnet-9.ipynb    
+def conv_block(in_channels, out_channels, pool=False):
+    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1), 
+              nn.BatchNorm2d(out_channels), 
+              nn.ReLU(inplace=True)]
+    if pool: layers.append(nn.MaxPool2d(2))
+    return nn.Sequential(*layers)
+
+class GenericConvModel(ImageClassificationBase):
+    def __init__(self, in_size, n_channels):
+        super().__init__()
+        num_classes = 10 
+
+        self.conv1 = conv_block(n_channels, 64)
+        self.conv2 = conv_block(64, 128, pool=True)
+        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128))
+        
+        self.conv3 = conv_block(128, 256, pool=True)
+        self.conv4 = conv_block(256, 512, pool=True)
+        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512))
+        
+        self.classifier = nn.Sequential(nn.AdaptiveMaxPool2d((1,1)), 
+                                        nn.Flatten(), 
+                                        nn.Dropout(0.2),
+                                        nn.Linear(512, num_classes))
+        
+    def forward(self, xb):
+        out = self.conv1(xb)
+        out = self.conv2(out)
+        out = self.res1(out) + out
+        out = self.conv3(out)
+        out = self.conv4(out)
+        out = self.res2(out) + out
+        out = self.classifier(out)
+        return out

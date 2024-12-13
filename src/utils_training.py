@@ -61,16 +61,21 @@ def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm 
     my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     ColdStart(my_server,list_clients,row_exp,algorithm,clustering_metric)
     
-    for _ in range(0, row_exp['federated_rounds']):
+    round_counter = 0
+    while round_counter < row_exp['federated_rounds'] or len([client for client in list_clients if client.cluster_id is None]) > 0:
         selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
         send_cluster_models_to_clients(selected_clients, my_server)
-        for client in selected_clients :
+        
+        for client in selected_clients:
             client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-            if client.cluster_id is 'None':
-                client_migration(my_server,client)
+            if client.cluster_id is None:
+                client_migration(my_server, client)
 
         fedavg(my_server, selected_clients)
-    
+
+        # Update round counter only if within federated rounds
+        if round_counter < row_exp['federated_rounds']:
+            round_counter += 1
     return
 
 def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',iterative = False) -> pd.DataFrame:

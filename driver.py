@@ -75,6 +75,8 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
 
             df_results = run_benchmark(model_server, list_clients, row_exp)
             
+        elif row_exp['exp_type'] == "pers-federated":
+            df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm='cheat',clustering_metric='none')
         elif row_exp['exp_type'] == "client":
             
             print(f"Launching client-side experiment with parameters:\n {str_row_exp}")

@@ -101,16 +101,27 @@ def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict,
     import torch 
 
     torch.manual_seed(row_exp['seed'])
+    
     if iterative == True :
         FedGroup(my_server,list_clients,row_exp,algorithm,clustering_metric)      
     else: 
         my_server = train_federated(my_server, list_clients, row_exp, use_cluster_models = False)
         my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
         setattr(my_server, 'num_clusters', row_exp['num_clusters'])
+        
+        if algorithm == 'cheat':
+            # Use Personalized for Clustered Federated Learning with knowledge of client heterogeneity class
+            # Used as a benchmark for CFL.
+            print('Using personalized Federated Learning!')
+            heterogeneity_classes = set([client.heterogeneity_class for client in list_clients])
+            cluster_mapping = {cls: idx for idx, cls in enumerate(heterogeneity_classes)}
+            for client in list_clients:
+                client.cluster_id = cluster_mapping[client.heterogeneity_class]        
 
-        if algorithm != 'kmeans' :
+        elif algorithm == 'agglomerative' :
             Agglomerative_Clustering(list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
-        else: 
+        
+        elif algorithm == 'kmeans': 
             k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
 
         my_server = train_federated(my_server, list_clients, row_exp, use_cluster_models = True)

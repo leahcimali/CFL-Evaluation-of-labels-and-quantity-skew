@@ -8,7 +8,8 @@ import pandas as pd
 from src.models import ImageClassificationBase
 from src.fedclass import Server
 
-def group_cold_start(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',alpha :int =4)-> None:
+
+def ColdStart(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',alpha :int =6, cold_start :bool= True)-> None:
     """ Cold start clustering for iterative server-side CFL. Create first clustering iteration using a subsample of all clients. 
     Credit -> Inspired by https://github.com/morningD/FlexCFL
     
@@ -20,24 +21,56 @@ def group_cold_start(my_server : Server, list_clients : list, row_exp : dict, al
         algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
         clustering_metric : Euclidean, cosine or MADC
         alpha : Parameter for client selection
-        
+        coldstart : If the cold start algorithm is done 
     """
     import random
     from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, send_cluster_models_to_clients,client_migration
     import copy
     # select a subsample of clients for coldstart
     selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
-    unselected_clients = [client for client in list_clients if client not in selected_clients]
-    send_cluster_models_to_clients(list_clients, my_server)
+    #unselected_clients = [client for client in list_clients if client not in selected_clients]
+    send_cluster_models_to_clients(selected_clients, my_server)
     for client in selected_clients :
         client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-    if algorithm != 'kmeans' :
-        Agglomerative_Clustering(selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
-    else: 
-        k_means_clustering(selected_clients, row_exp['num_clusters'], row_exp['seed'])
+        if algorithm != 'kmeans' :
+            Agglomerative_Clustering(selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+        else: 
+            k_means_clustering(selected_clients, row_exp['num_clusters'], row_exp['seed'])
     fedavg(my_server, selected_clients)
-    client_migration(my_server,unselected_clients)
+    return
 
+def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',alpha :int =6)-> None:
+    """ FedGroup for one communication round
+    Credit -> Inspired by https://github.com/morningD/FlexCFL
+    
+    Arguments:
+
+        main_model : Type of Server model needed    
+        list_clients : A list of Client Objects used as nodes in the FL protocol  
+        row_exp : The current experiment's global parameters
+        algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
+        clustering_metric : Euclidean, cosine or MADC
+        alpha : Parameter for client selection
+        coldstart : If the cold start algorithm is done 
+    """
+    import random
+    from src.utils_fed import fedavg, send_cluster_models_to_clients,client_migration
+    import copy
+    # Cold_start
+    setattr(my_server, 'num_clusters', row_exp['num_clusters'])
+    my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+    ColdStart(my_server,list_clients,row_exp,algorithm,clustering_metric)
+    
+    for _ in range(0, row_exp['federated_rounds']):
+        selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
+        send_cluster_models_to_clients(selected_clients, my_server)
+        for client in selected_clients :
+            client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            if client.cluster_id is 'None':
+                client_migration(my_server,client)
+
+        fedavg(my_server, selected_clients)
+    
     return
 
 def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',iterative = False) -> pd.DataFrame:
@@ -63,14 +96,8 @@ def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict,
     import torch 
 
     torch.manual_seed(row_exp['seed'])
-    if iterative :
-        setattr(my_server, 'num_clusters', row_exp['num_clusters'])
-        my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
-        for round in range(0, row_exp['federated_rounds']):
-            group_cold_start(my_server,list_clients,row_exp,algorithm,clustering_metric)
-        while None in [client.cluster_id for client in list_clients]:
-            group_cold_start(my_server,list_clients,row_exp,algorithm,clustering_metric)
-            
+    if iterative == True :
+        FedGroup(my_server,list_clients,row_exp,algorithm,clustering_metric)      
     else: 
         my_server = train_federated(my_server, list_clients, row_exp, use_cluster_models = False)
         my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  

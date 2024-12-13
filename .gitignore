@@ -164,3 +164,4 @@ test_config.csv
 results/*
 datasets/*
 *.sh
+Archive/*

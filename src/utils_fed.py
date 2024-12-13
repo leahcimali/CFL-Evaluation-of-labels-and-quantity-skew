@@ -144,21 +144,21 @@ def model_dissimilarity(client : list, server_model : list) :
     
     return (1 - cosine_similarity(server_weights.numpy(), client_weights.numpy())) / 2
 
-def client_migration(my_server,client_list):
-    for client in client_list :
-        client_server_dissimilarity = [(cluster_id,model_dissimilarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
-        dissimilarity_values = [dissimilarity for _, dissimilarity in client_server_dissimilarity]
+def client_migration(my_server,client):
 
-        #Find the index of the minimum dissimilarity
-        min_index = np.argmin(dissimilarity_values)
+    client_server_dissimilarity = [(cluster_id,model_dissimilarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
+    dissimilarity_values = [dissimilarity for _, dissimilarity in client_server_dissimilarity]
 
-        # Use the index to get the corresponding cluster_id
-        min_cluster_id, _ = client_server_dissimilarity[min_index]
+    #Find the index of the minimum dissimilarity
+    min_index = np.argmin(dissimilarity_values)
 
-        # Update the client with the corresponding model and cluster_id
-        client.model = my_server.clusters_models[min_cluster_id]
-        client.cluster_id = min_cluster_id
-            
+    # Use the index to get the corresponding cluster_id
+    min_cluster_id, _ = client_server_dissimilarity[min_index]
+
+    # Update the client with the corresponding model and cluster_id
+    client.model = my_server.clusters_models[min_cluster_id]
+    client.cluster_id = min_cluster_id
+        
 def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     

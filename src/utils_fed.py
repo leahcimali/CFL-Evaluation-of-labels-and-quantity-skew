@@ -80,7 +80,7 @@ def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
     return new_model
     
     
-def fedavg(my_server : Server, list_clients : list, ponderation : bool = True) -> None:
+def fedavg(my_server : Server, list_clients : list, ponderated : bool = True) -> None:
     """
     Implementation of the (Clustered) federated aggregation algorithm with one model per cluster. 
     The code modifies the cluster models `my_server.cluster_models[i]'
@@ -93,7 +93,7 @@ def fedavg(my_server : Server, list_clients : list, ponderation : bool = True) -
     """
     if my_server.num_clusters == None:
 
-        my_server.model = model_avg(list_clients,ponderation)
+        my_server.model = model_avg(list_clients,ponderated)
     
     else : 
          
@@ -103,7 +103,7 @@ def fedavg(my_server : Server, list_clients : list, ponderation : bool = True) -
             
             if len(cluster_clients_list)>0 :  
           
-                my_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderation)
+                my_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderated)
     return
 
 

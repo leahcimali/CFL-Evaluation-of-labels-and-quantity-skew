@@ -64,7 +64,7 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clien
 
 def launch_experiment(model_server, list_clients, row_exp, output_name, save_results = True):
         
-        from src.utils_training import run_cfl_client_side, run_cfl_server_side
+        from src.utils_training import run_cfl_client_side, run_cfl_server_side, run_cfl_hybrid
         from src.utils_training import run_benchmark
 
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
@@ -77,6 +77,10 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
             
         elif row_exp['exp_type'] == "pers-federated":
             df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm='cheat',clustering_metric='none')
+        elif row_exp['exp_type'] == "hybrid":
+            print(f"Launching hybrid CFL experiment with parameters:\n {str_row_exp}")
+            # Need to add other than KMeans
+            df_results = run_cfl_hybrid(model_server,list_clients,row_exp)
         elif row_exp['exp_type'] == "client":
             
             print(f"Launching client-side experiment with parameters:\n {str_row_exp}")

@@ -175,6 +175,57 @@ def run_cfl_client_side(my_server : Server, list_clients : list, row_exp : dict,
     
     return df_results
 
+def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = False) -> pd.DataFrame:
+    
+    """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
+    from model weights .
+    
+    Arguments:
+
+        my_server : Main server model    
+        list_clients : A list of Client Objects used as nodes in the FL protocol  
+        row_exp : The current experiment's global parameters
+        algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
+        clustering_metric : euclidean, cosine or MADC
+
+    Returns:
+
+        df_results : dataframe with the experiment results
+    """
+
+    from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, set_client_cluster
+    import copy
+    import torch 
+
+    torch.manual_seed(row_exp['seed'])
+    
+    
+    cold_start = row_exp
+    cold_start['federated_rounds'] = 1
+    my_server = train_federated(my_server, list_clients, cold_start, use_cluster_models = False,ponderated=False)
+    my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+    setattr(my_server, 'num_clusters', row_exp['num_clusters'])
+    for client in list_clients:
+        client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+    for round in range(row_exp['federated_rounds']):
+        if algorithm == 'agglomerative' :
+            Agglomerative_Clustering(list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+            
+        elif algorithm == 'kmeans': 
+            k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
+        fedavg(my_server, list_clients)
+        set_client_cluster(my_server, list_clients, row_exp)
+        if round != row_exp['federated_rounds'] -1 :
+            for client in list_clients:
+                client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+    for client in list_clients :
+
+        acc = test_model(my_server.clusters_models[client.cluster_id], client.data_loader['test'])    
+        setattr(client, 'accuracy', acc)
+
+    df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
+
+    return df_results 
 
 def run_benchmark(main_model : nn.Module, list_clients : list, row_exp : dict) -> pd.DataFrame:
 

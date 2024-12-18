@@ -215,7 +215,12 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
             k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
-        if round != row_exp['federated_rounds'] -1 :
+        for client in list_clients:
+            client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+    for round in range(row_exp['federated_rounds']):
+        fedavg(my_server, list_clients)
+        set_client_cluster(my_server, list_clients, row_exp)
+        if round != row_exp['federated_rounds']//2 -1 :
             for client in list_clients:
                 client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     for client in list_clients :

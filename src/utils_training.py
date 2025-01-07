@@ -386,6 +386,68 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
     
     return model, history
 
+def train_central_fedprox(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
+    row_exp: dict, my_server: Server = None, mu: float = 0.0):
+
+    """
+    Main training function for centralized learning with optional FedProx regularization.
+    
+    Arguments:
+        model : Local model to be trained
+        train_loader : DataLoader with the training dataset
+        val_loader : DataLoader with the validation dataset
+        row_exp : Experiment's global parameters
+        my_server : Instance of the Server class for FedProx regularization
+        mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
+
+    Returns:
+        (model, history) : Trained model with updated weights and training history
+    """
+    
+    # Move the model and server's model to the device if necessary
+    model.to(device)
+    if mu > 0 :
+        my_server.model.to(device)
+
+    # Optimizer setup
+    opt_func = torch.optim.Adam
+    lr = 0.001
+    history = []
+    optimizer = opt_func(model.parameters(), lr)
+
+    for epoch in range(row_exp['centralized_epochs']):
+        model.train()
+        train_losses = []
+
+        for batch in train_loader:
+            # Move batch to the same device as the model
+            inputs, labels = [item.to(device) for item in batch]
+
+            # Forward pass and calculate base loss
+            loss = model.training_step((inputs, labels), device)
+            
+            # If mu > 0, apply FedProx regularization
+            if mu > 0 :
+                proximal_term = 0.0
+                for w, w_t in zip(model.parameters(), my_server.model.parameters()):
+                    proximal_term += (w - w_t).norm(2) ** 2
+                loss += (mu / 2) * proximal_term  # Add FedProx term
+
+            # Backward pass and optimization step
+            train_losses.append(loss)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        
+        # Validation step
+        result = evaluate(model, val_loader)  # Ensure evaluate handles CUDA as needed
+        result['train_loss'] = torch.stack(train_losses).mean().item()
+
+        # Print epoch results and add to history
+        model.epoch_end(epoch, result)
+        history.append(result)
+
+    return model, history
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

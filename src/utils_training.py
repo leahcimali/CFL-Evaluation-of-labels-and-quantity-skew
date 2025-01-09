@@ -232,7 +232,7 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
 
     return df_results 
 
-def run_benchmark(main_model : nn.Module, list_clients : list, row_exp : dict) -> pd.DataFrame:
+def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
 
     """ Benchmark function to calculate baseline FL results and ``optimal'' personalization results if clusters are known in advance
 
@@ -254,9 +254,10 @@ def run_benchmark(main_model : nn.Module, list_clients : list, row_exp : dict) -
     torch.manual_seed(row_exp['seed'])
     torch.use_deterministic_algorithms(True)
 
-    curr_model = main_model if row_exp['exp_type'] == 'global-federated' else main_model.model
+    curr_model = model_server.model
 
     if row_exp['exp_type'] == 'pers-centralized':
+        curr_model = model_server.model
         for heterogeneity_class in list_heterogeneities:
             list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
             train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
@@ -270,8 +271,7 @@ def run_benchmark(main_model : nn.Module, list_clients : list, row_exp : dict) -
     
     elif row_exp['exp_type'] == 'global-federated':
                 
-        my_server = copy.deepcopy(curr_model)
-        model_trained = train_federated(my_server, list_clients, row_exp, use_cluster_models = False)
+        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False)
 
         _, _,test_loader = centralize_data(list_clients,row_exp)
         global_acc = test_model(model_trained.model, test_loader) 
@@ -279,13 +279,22 @@ def run_benchmark(main_model : nn.Module, list_clients : list, row_exp : dict) -
         for client in list_clients : 
     
             setattr(client, 'accuracy', global_acc)
+    elif row_exp['exp_type'] == 'fedprox':
+        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False, fedprox=True)
 
+        _, _,test_loader = centralize_data(list_clients,row_exp)
+        global_acc = test_model(model_trained.model, test_loader) 
+                    
+        for client in list_clients : 
+    
+            setattr(client, 'accuracy', global_acc)
+        
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
     
     return df_results
 
 
-def train_federated(main_model, list_clients, row_exp, use_cluster_models = False, ponderated = True):
+def train_federated(main_model, list_clients, row_exp, use_cluster_models = False, ponderated = True,fedprox = False):
     
     """Controler function to launch federated learning
 
@@ -295,10 +304,14 @@ def train_federated(main_model, list_clients, row_exp, use_cluster_models = Fals
         list_clients: A list of Client Objects used as nodes in the FL protocol  
         row_exp: The current experiment's global parameters
         use_cluster_models: Boolean to determine whether to use personalization by clustering
+        fedprox : Boolean to determine whether to use fedprox 
     """
     
     from src.utils_fed import send_server_model_to_client, send_cluster_models_to_clients, fedavg
-    
+    if fedprox :
+        mu =0.01
+    else : 
+        mu =0
     for i in range(0, row_exp['federated_rounds']):
 
         accs = []
@@ -313,10 +326,10 @@ def train_federated(main_model, list_clients, row_exp, use_cluster_models = Fals
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
-            client.model, curr_acc = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, curr_acc = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
             accs.append(curr_acc)
             fedavg(main_model, list_clients,ponderated)
-     
+
     return main_model
 
 
@@ -336,7 +349,7 @@ def evaluate(model : nn.Module, val_loader : DataLoader) -> dict:
         output = model.validation_step(batch,device)
         outputs.append(output)
     return model.validation_epoch_end(outputs)
-
+'''
 def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, row_exp: dict):
     """ Main training function for centralized learning
     
@@ -385,9 +398,9 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         history.append(result)
     
     return model, history
-
-def train_central_fedprox(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
-    row_exp: dict, my_server: Server = None, mu: float = 0.0):
+'''
+def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
+    row_exp: dict, mu: float = 0.0):
 
     """
     Main training function for centralized learning with optional FedProx regularization.
@@ -403,11 +416,13 @@ def train_central_fedprox(model: ImageClassificationBase, train_loader: DataLoad
     Returns:
         (model, history) : Trained model with updated weights and training history
     """
-    
+    import copy
+
     # Move the model and server's model to the device if necessary
-    model.to(device)
+    server_model = copy.deepcopy(model)
+
     if mu > 0 :
-        my_server.model.to(device)
+        server_model.to(device)
 
     # Optimizer setup
     opt_func = torch.optim.Adam
@@ -429,7 +444,7 @@ def train_central_fedprox(model: ImageClassificationBase, train_loader: DataLoad
             # If mu > 0, apply FedProx regularization
             if mu > 0 :
                 proximal_term = 0.0
-                for w, w_t in zip(model.parameters(), my_server.model.parameters()):
+                for w, w_t in zip(model.parameters(), server_model.parameters()):
                     proximal_term += (w - w_t).norm(2) ** 2
                 loss += (mu / 2) * proximal_term  # Add FedProx term
 

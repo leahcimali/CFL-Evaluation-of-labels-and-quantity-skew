@@ -69,8 +69,8 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
 
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
-        if row_exp['exp_type'] == "global-federated" or row_exp['exp_type'] == "pers-centralized" or row_exp['exp_type'] == "fedprox":
-            
+        if row_exp['exp_type'] == "global-federated" or row_exp['exp_type'] == "pers-centralized" or row_exp['exp_type'] == "fedprox" or row_exp['exp_type'].split('-')[0] == "fedprox":
+
             print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 
             df_results = run_benchmark(model_server, list_clients, row_exp)

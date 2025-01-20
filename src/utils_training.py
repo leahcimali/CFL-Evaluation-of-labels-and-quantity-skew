@@ -279,8 +279,13 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
         for client in list_clients : 
     
             setattr(client, 'accuracy', global_acc)
-    elif row_exp['exp_type'] == 'fedprox':
-        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False, fedprox=True)
+    elif row_exp['exp_type'].split('-')[0] == 'fedprox':
+        if len(row_exp['exp_type'].split('-')) == 2:
+            mu = row_exp['exp_type'].split('-')[1]
+            row_exp['exp_type'] = 'fedprox'
+        else :
+            mu =0.01
+        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False, fedprox=mu)
 
         _, _,test_loader = centralize_data(list_clients,row_exp)
         global_acc = test_model(model_trained.model, test_loader) 
@@ -309,7 +314,7 @@ def train_federated(main_model, list_clients, row_exp, use_cluster_models = Fals
     
     from src.utils_fed import send_server_model_to_client, send_cluster_models_to_clients, fedavg
     if fedprox :
-        mu =0.01
+        mu =fedprox
     else : 
         mu =0
     for i in range(0, row_exp['federated_rounds']):

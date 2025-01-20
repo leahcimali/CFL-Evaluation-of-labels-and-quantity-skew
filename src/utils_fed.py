@@ -159,7 +159,7 @@ def client_migration(my_server,client):
     client.model = my_server.clusters_models[min_cluster_id]
     client.cluster_id = min_cluster_id
         
-def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> None:
+def k_means_clustering(list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
@@ -168,8 +168,9 @@ def k_means_clustering(list_clients : list, num_clusters : int, seed : int) -> N
         seed : Random seed to allow reproducibility
     """ 
     from sklearn.cluster import KMeans
-    
     weight_matrix = model_weight_matrix(list_clients)
+    if metric == 'EDC': 
+        weight_matrix = EDC(weight_matrix, num_clusters, seed)
     kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
     kmeans.fit(weight_matrix)
 
@@ -213,7 +214,7 @@ def calculate_data_driven_measure(pm : np.ndarray) -> np.ndarray:
 
     return dm # shape=(n_clients, n_clients)
 
-def MADC(weight_matrix : pd.DataFrame) : 
+def MADC(weight_matrix : pd.DataFrame) -> np.ndarray : 
     """Calculate the MADC (Mean Absolute difference of pairwise cosine similarity)
     
     Arguments:
@@ -223,6 +224,23 @@ def MADC(weight_matrix : pd.DataFrame) :
     cossim_matrix = cosine_similarity(weight_matrix)
     affinity_matrix = pd.DataFrame(calculate_data_driven_measure(cossim_matrix))
     return affinity_matrix
+
+def EDC(weight_matrix : pd.DataFrame, num_clusters : int, seed : int) ->  np.ndarray : 
+    """Calculate the euclidean distance of cosine dissimilarity with SVD decomposition
+    
+    Arguments:
+        weight_matrix : weight matrix DataFrame using the weights of local federated models        
+        num_clusters : Parameter to set the number of clusters needed
+    """
+    from sklearn.metrics.pairwise import cosine_similarity 
+    from sklearn.decomposition import TruncatedSVD
+    svd = TruncatedSVD(n_components=num_clusters, random_state=seed)
+    decomp_updates = svd.fit_transform(weight_matrix.T) # shape=(n_params, n_groups)
+
+        # Record the execution time of EDC calculation
+    decomposed_cossim_matrix = cosine_similarity(weight_matrix, decomp_updates.T) # shape=(n_clients, n_clients)
+    
+    return decomposed_cossim_matrix
 
 def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result

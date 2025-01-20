@@ -24,18 +24,18 @@ def ColdStart(my_server : Server, list_clients : list, row_exp : dict, algorithm
         coldstart : If the cold start algorithm is done 
     """
     import random
-    from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, send_cluster_models_to_clients,client_migration
+    from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, send_clusters_models_to_clients,client_migration
     import copy
     # select a subsample of clients for coldstart
     selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
     #unselected_clients = [client for client in list_clients if client not in selected_clients]
-    send_cluster_models_to_clients(selected_clients, my_server)
+    send_clusters_models_to_clients(selected_clients, my_server)
     for client in selected_clients :
         client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         if algorithm != 'kmeans' :
-            Agglomerative_Clustering(selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+            Agglomerative_Clustering(my_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
         else: 
-            k_means_clustering(selected_clients, row_exp['num_clusters'], row_exp['seed'])
+            k_means_clustering(my_server,selected_clients, row_exp['num_clusters'], row_exp['seed'],metric= clustering_metric)
     fedavg(my_server, selected_clients,ponderated= ponderated)
     return
 
@@ -54,7 +54,7 @@ def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm 
         coldstart : If the cold start algorithm is done 
     """
     import random
-    from src.utils_fed import fedavg, send_cluster_models_to_clients,client_migration
+    from src.utils_fed import fedavg, send_clusters_models_to_clients,client_migration
     import copy
     # Cold_start
     setattr(my_server, 'num_clusters', row_exp['num_clusters'])
@@ -64,7 +64,7 @@ def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm 
     round_counter = 0
     while round_counter < row_exp['federated_rounds'] or len([client for client in list_clients if client.cluster_id is None]) > 0:
         selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
-        send_cluster_models_to_clients(selected_clients, my_server)
+        send_clusters_models_to_clients(selected_clients, my_server)
         
         for client in selected_clients:
             client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
@@ -107,7 +107,7 @@ def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict,
     else:
         cold_start = row_exp
         cold_start['federated_rounds'] = 2 
-        my_server = train_federated(my_server, list_clients, cold_start, use_cluster_models = False,ponderated=ponderated)
+        my_server = train_federated(my_server, list_clients, cold_start, use_clusters_models = False,ponderated=ponderated)
         my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
         setattr(my_server, 'num_clusters', row_exp['num_clusters'])
         
@@ -121,12 +121,12 @@ def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict,
                 client.cluster_id = cluster_mapping[client.heterogeneity_class]        
 
         elif algorithm == 'agglomerative' :
-            Agglomerative_Clustering(list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+            Agglomerative_Clustering(my_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
         
         elif algorithm == 'kmeans': 
-            k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
+            k_means_clustering(my_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
 
-        my_server = train_federated(my_server, list_clients, row_exp, use_cluster_models = True)
+        my_server = train_federated(my_server, list_clients, row_exp, use_clusters_models = True)
 
     for client in list_clients :
 
@@ -202,17 +202,17 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
     
     cold_start = row_exp
     cold_start['federated_rounds'] = 1
-    my_server = train_federated(my_server, list_clients, cold_start, use_cluster_models = False,ponderated=False)
+    my_server = train_federated(my_server, list_clients, cold_start, use_clusters_models = False,ponderated=False)
     my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(my_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
         client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     for round in range(row_exp['federated_rounds']):
         if algorithm == 'agglomerative' :
-            Agglomerative_Clustering(list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+            Agglomerative_Clustering(my_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
             
         elif algorithm == 'kmeans': 
-            k_means_clustering(list_clients, row_exp['num_clusters'], row_exp['seed'])
+            k_means_clustering(my_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
         for client in list_clients:
@@ -271,7 +271,7 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
     
     elif row_exp['exp_type'] == 'global-federated':
                 
-        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False)
+        model_trained = train_federated(model_server, list_clients, row_exp, use_clusters_models = False)
 
         _, _,test_loader = centralize_data(list_clients,row_exp)
         global_acc = test_model(model_trained.model, test_loader) 
@@ -285,7 +285,7 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
             row_exp['exp_type'] = 'fedprox'
         else :
             mu =0.01
-        model_trained = train_federated(model_server, list_clients, row_exp, use_cluster_models = False, fedprox=mu)
+        model_trained = train_federated(model_server, list_clients, row_exp, use_clusters_models = False, fedprox=mu)
 
         _, _,test_loader = centralize_data(list_clients,row_exp)
         global_acc = test_model(model_trained.model, test_loader) 
@@ -299,7 +299,7 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
     return df_results
 
 
-def train_federated(main_model, list_clients, row_exp, use_cluster_models = False, ponderated = True,fedprox = False):
+def train_federated(main_model, list_clients, row_exp, use_clusters_models = False, ponderated = True,fedprox = False):
     
     """Controler function to launch federated learning
 
@@ -308,11 +308,11 @@ def train_federated(main_model, list_clients, row_exp, use_cluster_models = Fals
         main_model: Server model used in our experiment
         list_clients: A list of Client Objects used as nodes in the FL protocol  
         row_exp: The current experiment's global parameters
-        use_cluster_models: Boolean to determine whether to use personalization by clustering
+        use_clusters_models: Boolean to determine whether to use personalization by clustering
         fedprox : Boolean to determine whether to use fedprox 
     """
     
-    from src.utils_fed import send_server_model_to_client, send_cluster_models_to_clients, fedavg
+    from src.utils_fed import send_server_model_to_client, send_clusters_models_to_clients, fedavg
     if fedprox :
         mu =fedprox
     else : 
@@ -321,13 +321,13 @@ def train_federated(main_model, list_clients, row_exp, use_cluster_models = Fals
 
         accs = []
 
-        if use_cluster_models == False:
+        if use_clusters_models == False:
         
             send_server_model_to_client(list_clients, main_model)
 
         else:
 
-            send_cluster_models_to_clients(list_clients, main_model)
+            send_clusters_models_to_clients(list_clients, main_model)
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")

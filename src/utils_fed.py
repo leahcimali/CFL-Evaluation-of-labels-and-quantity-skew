@@ -24,7 +24,7 @@ def send_server_model_to_client(list_clients : list, my_server : Server) -> None
     return
 
 
-def send_cluster_models_to_clients(list_clients : list , my_server : Server) -> None:
+def send_clusters_models_to_clients(list_clients : list , my_server : Server) -> None:
     """ Function to copy Server modelm to clients based on attribute client.cluster_id
 
     Arguments: 
@@ -83,7 +83,7 @@ def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
 def fedavg(my_server : Server, list_clients : list, ponderated : bool = True) -> None:
     """
     Implementation of the (Clustered) federated aggregation algorithm with one model per cluster. 
-    The code modifies the cluster models `my_server.cluster_models[i]'
+    The code modifies the cluster models `my_server.clusters_models[i]'
 
     
     Arguments:
@@ -107,36 +107,53 @@ def fedavg(my_server : Server, list_clients : list, ponderated : bool = True) ->
     return
 
 
-def model_weight_matrix(list_clients : list) -> pd.DataFrame:
+def model_weight_matrix(my_server : Server, list_clients : list,  model_update: bool = False) -> pd.DataFrame:
    
     """ Create a weight matrix DataFrame using the weights of local federated models for use in the server-side CFL 
 
     Arguments:
-
+        my_server : FL Server
         list_clients: List of Clients with respective models
-         
+        model_update : Bool. if True uses current round model update instead of model weights for clustering matrix 
     Returns:
         DataFrame with weights of each model as rows
     """
 
     import numpy as np
     import pandas as pd
-    
 
-    model_dict = {client.id : client.model for client in list_clients}
+    model_dict = {client.id: client.model for client in list_clients}
+    cluster_id_dict = {client.id: client.cluster_id for client in list_clients}
 
     shapes = [param.data.cpu().numpy().shape for param in next(iter(model_dict.values())).parameters()]
     weight_matrix_np = np.empty((len(model_dict), sum(np.prod(shape) for shape in shapes)))
+    for idx, (client_id, client_model) in enumerate(model_dict.items()):
+        # Get the client model weights
+        client_weights = np.concatenate([param.data.cpu().numpy().flatten() for param in client_model.parameters()])
+        
+        if model_update:
+            # Get the cluster model corresponding to the client
+            cluster_id = cluster_id_dict[client_id]
+            if cluster_id :
+                cluster_model = my_server.clusters_models[cluster_id]
+            # In the case client have no current assign cluster 
+            else : 
+                cluster_model = my_server.model
+            cluster_weights = np.concatenate([param.data.cpu().numpy().flatten() for param in cluster_model.parameters()])
+            
+            # Compute the difference between client and cluster model weights
+            weights = client_weights - cluster_weights
+        else:
+            weights = client_weights
+        
+        # Populate the weight matrix
+        weight_matrix_np[idx, :] = weights
 
-    for idx, (_, model) in enumerate(model_dict.items()):
-
-        model_weights = np.concatenate([param.data.cpu().numpy().flatten() for param in model.parameters()])
-        weight_matrix_np[idx, :] = model_weights
-
+    # Create DataFrame
     weight_matrix = pd.DataFrame(weight_matrix_np, columns=[f'w_{i+1}' for i in range(weight_matrix_np.shape[1])])
 
     return weight_matrix
-
+    
 def model_dissimilarity(client : list, server_model : list) :
     from sklearn.metrics.pairwise import cosine_similarity
     server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0).cpu()
@@ -159,20 +176,23 @@ def client_migration(my_server,client):
     client.model = my_server.clusters_models[min_cluster_id]
     client.cluster_id = min_cluster_id
         
-def k_means_clustering(list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
+def k_means_clustering(my_server : Server, list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
+        my_server : FL Server
         list_clients : List of Clients on which to perform clustering
         num_clusters : Parameter to set the number of clusters needed
         seed : Random seed to allow reproducibility
     """ 
     from sklearn.cluster import KMeans
-    weight_matrix = model_weight_matrix(list_clients)
+    weight_matrix = model_weight_matrix(my_server,list_clients)
     if metric == 'EDC': 
+        weight_matrix = model_weight_matrix(my_server,list_clients,model_update=True)
         weight_matrix = EDC(weight_matrix, num_clusters, seed)
     kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
     kmeans.fit(weight_matrix)
+    weight_matrix = pd.DataFrame(weight_matrix)
 
     weight_matrix['cluster'] = kmeans.labels_
     weight_matrix.index = [client.id for client in list_clients]
@@ -242,10 +262,11 @@ def EDC(weight_matrix : pd.DataFrame, num_clusters : int, seed : int) ->  np.nda
     
     return decomposed_cossim_matrix
 
-def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
+def Agglomerative_Clustering(my_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
+        my_server : FL Server
         list_clients : List of Clients on which to perform clustering
         num_clusters : Parameter to set the number of clusters needed
         clustering_metric : Specify the used metric, choose from 'euclidean', 'cosine' and MADC 
@@ -254,8 +275,9 @@ def Agglomerative_Clustering(list_clients : list, num_clusters : int, clustering
     """ 
     from sklearn.cluster import AgglomerativeClustering
 
-    weight_matrix = model_weight_matrix(list_clients)
+    weight_matrix = model_weight_matrix(my_server,list_clients)
     if clustering_metric == 'MADC': 
+        weight_matrix = model_weight_matrix(my_server,list_clients,model_update=True)
         affinity_matrix = MADC(weight_matrix)
         ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)
         weight_matrix = affinity_matrix

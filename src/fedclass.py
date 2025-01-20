@@ -70,7 +70,7 @@ class Server:
     """
 
     def __init__(self,model,num_clusters: int=None):
-        """Initialize a Server object with an empty dictionary of cluster_models
+        """Initialize a Server object with an empty dictionary of clusters_models
 
         Arguments:
         model: nn.Module

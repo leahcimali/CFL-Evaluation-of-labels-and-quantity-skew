@@ -281,7 +281,7 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
             setattr(client, 'accuracy', global_acc)
     elif row_exp['exp_type'].split('-')[0] == 'fedprox':
         if len(row_exp['exp_type'].split('-')) == 2:
-            mu = row_exp['exp_type'].split('-')[1]
+            mu = float(row_exp['exp_type'].split('-')[1])
             row_exp['exp_type'] = 'fedprox'
         else :
             mu =0.01
@@ -433,7 +433,8 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
 
     # Final validation accuracy
     final_val_acc = test_model(model, val_loader)
-
+    print(final_val_acc)
+    print(avg_grad)
     return model, history, final_val_acc, avg_grad
     
 

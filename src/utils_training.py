@@ -31,7 +31,7 @@ def ColdStart(my_server : Server, list_clients : list, row_exp : dict, algorithm
     #unselected_clients = [client for client in list_clients if client not in selected_clients]
     send_clusters_models_to_clients(selected_clients, my_server)
     for client in selected_clients :
-        client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         if algorithm != 'kmeans' :
             Agglomerative_Clustering(my_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
         else: 
@@ -67,7 +67,7 @@ def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm 
         send_clusters_models_to_clients(selected_clients, my_server)
         
         for client in selected_clients:
-            client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             if client.cluster_id is None:
                 client_migration(my_server, client)
 
@@ -160,7 +160,7 @@ def run_cfl_client_side(my_server : Server, list_clients : list, row_exp : dict,
 
         for client in list_clients:
 
-            client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
 
         fedavg(my_server, list_clients,ponderated)
 
@@ -206,7 +206,7 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
     my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(my_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
-        client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _ , _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     for round in range(row_exp['federated_rounds']):
         if algorithm == 'agglomerative' :
             Agglomerative_Clustering(my_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
@@ -216,13 +216,13 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
         for client in list_clients:
-            client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     for round in range(row_exp['federated_rounds']):
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
         if round != row_exp['federated_rounds']//2 -1 :
             for client in list_clients:
-                client.model, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+                client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     for client in list_clients :
 
         acc = test_model(my_server.clusters_models[client.cluster_id], client.data_loader['test'])    
@@ -261,7 +261,7 @@ def run_benchmark(model_server : Server, list_clients : list, row_exp : dict) ->
         for heterogeneity_class in list_heterogeneities:
             list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
             train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
-            model_trained, _ = train_central(curr_model, train_loader, val_loader, row_exp) 
+            model_trained, _, _, _ = train_central(curr_model, train_loader, val_loader, row_exp) 
 
             global_acc = test_model(model_trained, test_loader) 
                     
@@ -331,7 +331,7 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
-            client.model, curr_acc = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
+            client.model, curr_acc, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
             accs.append(curr_acc)
             fedavg(main_model, list_clients,ponderated)
 
@@ -354,59 +354,9 @@ def evaluate(model : nn.Module, val_loader : DataLoader) -> dict:
         output = model.validation_step(batch,device)
         outputs.append(output)
     return model.validation_epoch_end(outputs)
-'''
-def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, row_exp: dict):
-    """ Main training function for centralized learning
-    
-    Arguments:
-        model : Server model used in our experiment
-        train_loader : DataLoader with the training dataset
-        val_loader : Dataloader with the validation dataset
-        row_exp : The current experiment's global parameters
 
-    Returns:
-        (model, history) : base model with trained weights / results at each training step
-    """
-
-    # Check if CUDA is available and set the device
-    
-    # Move the model to the appropriate device
-    model.to(device)
-
-    opt_func = torch.optim.Adam  # if row_exp['nn_model'] == "linear" else torch.optim.Adam
-    lr = 0.001
-    history = []
-    optimizer = opt_func(model.parameters(), lr)
-
-    for epoch in range(row_exp['centralized_epochs']):
-        
-        model.train()
-        train_losses = []
-        
-        for batch in train_loader:
-            # Move batch to the same device as the model
-            inputs, labels = [item.to(device) for item in batch]
-    
-            # Pass the unpacked inputs and labels to the model's training step
-            loss = model.training_step((inputs, labels),device)            
-            train_losses.append(loss)
-            loss.backward()
-
-            optimizer.step()
-            optimizer.zero_grad()
-                
-        result = evaluate(model, val_loader)  # Ensure evaluate handles CUDA as needed
-        result['train_loss'] = torch.stack(train_losses).mean().item()        
-        
-        model.epoch_end(epoch, result)
-        
-        history.append(result)
-    
-    return model, history
-'''
 def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
-    row_exp: dict, mu: float = 0.0):
-
+                  row_exp: dict, mu: float = 0.0):
     """
     Main training function for centralized learning with optional FedProx regularization.
     
@@ -415,18 +365,17 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         train_loader : DataLoader with the training dataset
         val_loader : DataLoader with the validation dataset
         row_exp : Experiment's global parameters
-        my_server : Instance of the Server class for FedProx regularization
         mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
 
     Returns:
-        (model, history) : Trained model with updated weights and training history
+        (model, history, final_val_acc, avg_grad) : Trained model, training history, 
+        final validation accuracy, and average gradient vector
     """
     import copy
 
-    # Move the model and server's model to the device if necessary
+    # Move the model to the device
     server_model = copy.deepcopy(model)
-
-    if mu > 0 :
+    if mu > 0:
         server_model.to(device)
 
     # Optimizer setup
@@ -435,11 +384,16 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
     history = []
     optimizer = opt_func(model.parameters(), lr)
 
+    # Initialize variable to accumulate gradients
+    avg_grad = [torch.zeros_like(param) for param in model.parameters()]
+
     for epoch in range(row_exp['centralized_epochs']):
         model.train()
         train_losses = []
+        num_batches = 0
 
         for batch in train_loader:
+            num_batches += 1
             # Move batch to the same device as the model
             inputs, labels = [item.to(device) for item in batch]
 
@@ -447,18 +401,28 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
             loss = model.training_step((inputs, labels), device)
             
             # If mu > 0, apply FedProx regularization
-            if mu > 0 :
+            if mu > 0:
                 proximal_term = 0.0
                 for w, w_t in zip(model.parameters(), server_model.parameters()):
                     proximal_term += (w - w_t).norm(2) ** 2
                 loss += (mu / 2) * proximal_term  # Add FedProx term
 
-            # Backward pass and optimization step
+            # Backward pass
             train_losses.append(loss)
             loss.backward()
+
+            # Accumulate gradients
+            for i, param in enumerate(model.parameters()):
+                avg_grad[i] += param.grad.clone().detach()
+
+            # Optimization step
             optimizer.step()
             optimizer.zero_grad()
         
+        # Normalize gradients to compute the average
+        for i in range(len(avg_grad)):
+            avg_grad[i] /= num_batches
+
         # Validation step
         result = evaluate(model, val_loader)  # Ensure evaluate handles CUDA as needed
         result['train_loss'] = torch.stack(train_losses).mean().item()
@@ -467,7 +431,10 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         model.epoch_end(epoch, result)
         history.append(result)
 
-    return model, history
+    # Final validation accuracy
+    final_val_acc = test_model(model, val_loader)
+
+    return model, history, final_val_acc, avg_grad
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

@@ -112,7 +112,7 @@ def run_cfl_server_side(my_server : Server, list_clients : list, row_exp : dict,
     else:
         cold_start = row_exp
         cold_start['federated_rounds'] = 2 
-        my_server = train_federated(my_server, list_clients, cold_start, use_clusters_models = False,ponderated=ponderated)
+        my_server = train_federated(my_server, list_clients, cold_start, use_clusters_models = False, ponderated=ponderated)
         my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
         setattr(my_server, 'num_clusters', row_exp['num_clusters'])
         

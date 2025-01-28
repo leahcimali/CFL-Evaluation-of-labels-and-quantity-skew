@@ -7,38 +7,38 @@ from torch.utils.data import DataLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def send_server_model_to_client(list_clients : list, my_server : Server) -> None:
+def send_server_model_to_client(list_clients : list, fl_server : Server) -> None:
     
     """ Function to copy the Server model to client attributes in a FL protocol
 
     Arguments:
         list_clients : List of Client objects on which to set the parameter `model'
-        my_server : Server object with the model to copy
+        fl_server : Server object with the model to copy
     """
 
     import copy
 
     for client in list_clients:
-        setattr(client, 'model', copy.deepcopy(my_server.model))
+        setattr(client, 'model', copy.deepcopy(fl_server.model))
 
     return
 
 
-def send_clusters_models_to_clients(list_clients : list , my_server : Server) -> None:
+def send_clusters_models_to_clients(list_clients : list , fl_server : Server) -> None:
     """ Function to copy Server modelm to clients based on attribute client.cluster_id
 
     Arguments: 
         list_clients : List of Clients to update
-        my_server : Server from which to fetch models
+        fl_server : Server from which to fetch models
     """
 
     import copy
 
     for client in list_clients:
             if client.cluster_id is None:
-                setattr(client, 'model', copy.deepcopy(my_server.model))
+                setattr(client, 'model', copy.deepcopy(fl_server.model))
             else:
-                setattr(client, 'model', copy.deepcopy(my_server.clusters_models[client.cluster_id]))
+                setattr(client, 'model', copy.deepcopy(fl_server.clusters_models[client.cluster_id]))
     return 
 
 
@@ -80,39 +80,39 @@ def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
     return new_model
     
     
-def fedavg(my_server : Server, list_clients : list, ponderated : bool = True) -> None:
+def fedavg(fl_server : Server, list_clients : list, ponderated : bool = True) -> None:
     """
     Implementation of the (Clustered) federated aggregation algorithm with one model per cluster. 
-    The code modifies the cluster models `my_server.clusters_models[i]'
+    The code modifies the cluster models `fl_server.clusters_models[i]'
 
     
     Arguments:
-        my_server : Server model which contains the cluster models
+        fl_server : Server model which contains the cluster models
         list_clients: List of clients, each containing a PyTorch model and a data loader.
         ponderation : If ponderation is True will pondated weight by quantity of data.
     """
-    if my_server.num_clusters == None:
+    if fl_server.num_clusters == None:
 
-        my_server.model = model_avg(list_clients,ponderated)
+        fl_server.model = model_avg(list_clients,ponderated)
     
     else : 
          
-         for cluster_id in range(my_server.num_clusters):
+         for cluster_id in range(fl_server.num_clusters):
                       
             cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id]
             
             if len(cluster_clients_list)>0 :  
           
-                my_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderated)
+                fl_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderated)
     return
 
 
-def model_weight_matrix(my_server : Server, list_clients : list,  model_update: bool = False) -> pd.DataFrame:
+def model_weight_matrix(fl_server : Server, list_clients : list,  model_update: bool = False) -> pd.DataFrame:
    
     """ Create a weight matrix DataFrame using the weights of local federated models for use in the server-side CFL 
 
     Arguments:
-        my_server : FL Server
+        fl_server : FL Server
         list_clients: List of Clients with respective models
         model_update : Bool. if True uses current round model update instead of model weights for clustering matrix 
     Returns:
@@ -135,10 +135,10 @@ def model_weight_matrix(my_server : Server, list_clients : list,  model_update: 
             # Get the cluster model corresponding to the client
             cluster_id = cluster_id_dict[client_id]
             if cluster_id :
-                cluster_model = my_server.clusters_models[cluster_id]
+                cluster_model = fl_server.clusters_models[cluster_id]
             # In the case client have no current assign cluster 
             else : 
-                cluster_model = my_server.model
+                cluster_model = fl_server.model
             cluster_weights = np.concatenate([param.data.cpu().numpy().flatten() for param in cluster_model.parameters()])
             
             # Compute the difference between client and cluster model weights
@@ -154,12 +154,12 @@ def model_weight_matrix(my_server : Server, list_clients : list,  model_update: 
 
     return weight_matrix
 
-def model_similarity_matrix(my_server : Server, list_clients : list, metric: str = 'distcross_cluster', model_update: bool = False):
+def model_similarity_matrix(fl_server : Server, list_clients : list, metric: str = 'distcross_cluster', model_update: bool = False):
     """
     Compute the dissimilarity between a client model and a server model based on the specified metric.
 
     Args:
-        my_server : FL server
+        fl_server : FL server
         list_clients: List containing all clients
         server_model: The server model.
         metric: The metric to compute. Options: 
@@ -173,7 +173,7 @@ def model_similarity_matrix(my_server : Server, list_clients : list, metric: str
     import torch
     from scipy.spatial.distance import pdist, squareform
     from sklearn.metrics.pairwise import cosine_similarity
-    weight_matrix = model_weight_matrix(my_server,list_clients).to_numpy()
+    weight_matrix = model_weight_matrix(fl_server,list_clients).to_numpy()
 
     if metric == 'cosine_similarity':
         # Cosine similarity
@@ -211,9 +211,9 @@ def model_similarity(client : list, server_model : list) :
     
     return (1 - cosine_similarity(server_weights.numpy(), client_weights.numpy())) / 2
 
-def client_migration(my_server,client):
+def client_migration(fl_server,client):
 
-    client_server_dissimilarity = [(cluster_id,model_similarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
+    client_server_dissimilarity = [(cluster_id,model_similarity(client, server_model)) for cluster_id, server_model in fl_server.clusters_models.items()]
     dissimilarity_values = [dissimilarity for _, dissimilarity in client_server_dissimilarity]
 
     #Find the index of the minimum dissimilarity
@@ -223,22 +223,22 @@ def client_migration(my_server,client):
     min_cluster_id, _ = client_server_dissimilarity[min_index]
 
     # Update the client with the corresponding model and cluster_id
-    client.model = my_server.clusters_models[min_cluster_id]
+    client.model = fl_server.clusters_models[min_cluster_id]
     client.cluster_id = min_cluster_id
         
-def k_means_clustering(my_server : Server, list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
+def k_means_clustering(fl_server : Server, list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
-        my_server : FL Server
+        fl_server : FL Server
         list_clients : List of Clients on which to perform clustering
         num_clusters : Parameter to set the number of clusters needed
         seed : Random seed to allow reproducibility
     """ 
     from sklearn.cluster import KMeans
-    weight_matrix = model_weight_matrix(my_server,list_clients)
+    weight_matrix = model_weight_matrix(fl_server,list_clients)
     if metric == 'EDC': 
-        weight_matrix = model_weight_matrix(my_server,list_clients,model_update=True)
+        weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=True)
         weight_matrix = EDC(weight_matrix, num_clusters, seed)
     kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
     kmeans.fit(weight_matrix)
@@ -312,11 +312,11 @@ def EDC(weight_matrix : pd.DataFrame, num_clusters : int, seed : int) ->  np.nda
     
     return decomposed_cossim_matrix
 
-def Agglomerative_Clustering(my_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
+def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
-        my_server : FL Server
+        fl_server : FL Server
         list_clients : List of Clients on which to perform clustering
         num_clusters : Parameter to set the number of clusters needed
         clustering_metric : Specify the used metric, choose from 'euclidean', 'cosine' and MADC 
@@ -325,9 +325,9 @@ def Agglomerative_Clustering(my_server: Server, list_clients : list, num_cluster
     """ 
     from sklearn.cluster import AgglomerativeClustering
 
-    weight_matrix = model_weight_matrix(my_server,list_clients)
+    weight_matrix = model_weight_matrix(fl_server,list_clients)
     if clustering_metric == 'MADC': 
-        weight_matrix = model_weight_matrix(my_server,list_clients,model_update=True)
+        weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=True)
         affinity_matrix = MADC(weight_matrix)
         ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)
         weight_matrix = affinity_matrix
@@ -343,13 +343,13 @@ def Agglomerative_Clustering(my_server: Server, list_clients : list, num_cluster
         setattr(client, 'cluster_id',clusters_identities[client.id])
     return      
 
-def init_server_cluster(my_server : Server, list_clients : list, row_exp : dict, imgs_params: dict, p_expert_opinion : float = 0) -> None:
+def init_server_cluster(fl_server : Server, list_clients : list, row_exp : dict, imgs_params: dict, p_expert_opinion : float = 0) -> None:
     
     """ Function to initialize cluster membership for client-side CFL (sets param cluster id) 
     using a given distribution or completely at random. 
     
     Arguments:
-        my_server : Server model containing one model per cluster
+        fl_server : Server model containing one model per cluster
 
         list_clients : List of Clients  whose model we want to initialize
 
@@ -372,12 +372,12 @@ def init_server_cluster(my_server : Server, list_clients : list, row_exp : dict,
         
     p_rest = (1 - p_expert_opinion) / (row_exp['num_clusters'] - 1)
 
-    my_server.num_clusters = row_exp['num_clusters']
+    fl_server.num_clusters = row_exp['num_clusters']
     if row_exp['nn_model'] == 'linear':
-        my_server.clusters_models = {cluster_id: GenericLinearModel(in_size=imgs_params[0]) for cluster_id in range(row_exp['num_clusters'])}
+        fl_server.clusters_models = {cluster_id: GenericLinearModel(in_size=imgs_params[0]) for cluster_id in range(row_exp['num_clusters'])}
         
     elif row_exp['nn_model'] == 'convolutional':
-        my_server.clusters_models = {cluster_id: GenericConvModel(in_size=imgs_params[0], n_channels=imgs_params[1]) for cluster_id in range(row_exp['num_clusters'])}
+        fl_server.clusters_models = {cluster_id: GenericConvModel(in_size=imgs_params[0], n_channels=imgs_params[1]) for cluster_id in range(row_exp['num_clusters'])}
     
     for client in list_clients:
     
@@ -386,7 +386,7 @@ def init_server_cluster(my_server : Server, list_clients : list, row_exp : dict,
 
         client.cluster_id = np.random.choice(range(row_exp['num_clusters']), p = probs)
         
-        client.model = copy.deepcopy(my_server.clusters_models[client.cluster_id])
+        client.model = copy.deepcopy(fl_server.clusters_models[client.cluster_id])
     
     return 
 
@@ -430,11 +430,11 @@ def loss_calculation(model : nn.modules, train_loader : DataLoader) -> float:
 
 
 
-def set_client_cluster(my_server : Server, list_clients : list, row_exp : dict) -> None:
+def set_client_cluster(fl_server : Server, list_clients : list, row_exp : dict) -> None:
     """ Function to calculate cluster membership for client-side CFL (sets param cluster id)
     
      Arguments:
-        my_server : Server model containing one model per cluster
+        fl_server : Server model containing one model per cluster
 
         list_clients : List of Clients  whose model we want to initialize
 
@@ -450,13 +450,13 @@ def set_client_cluster(my_server : Server, list_clients : list, row_exp : dict) 
         
         for cluster_id in range(row_exp['num_clusters']):
         
-            cluster_loss = loss_calculation(my_server.clusters_models[cluster_id], client.data_loader['train'])
+            cluster_loss = loss_calculation(fl_server.clusters_models[cluster_id], client.data_loader['train'])
         
             cluster_losses.append(cluster_loss)
         
         index_of_min_loss = np.argmin(cluster_losses)
         
-        client.model = copy.deepcopy(my_server.clusters_models[index_of_min_loss])
+        client.model = copy.deepcopy(fl_server.clusters_models[index_of_min_loss])
     
         client.cluster_id = index_of_min_loss
     

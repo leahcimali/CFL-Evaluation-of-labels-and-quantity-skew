@@ -7,44 +7,56 @@ import torch.optim as optim
 import pandas as pd
 import copy
 
-def srfca(my_server : Server, list_clients : list, row_exp : dict ,lambda_threshold,connection_size_t,beta) -> pd.DataFrame:
+def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
   from src.utils_fed import send_clusters_models_to_clients, model_weight_matrix
-  from src.utils_training import train_central
+  from src.utils_training import train_central,test_model
   from src.sr_fca import one_shot
-
+  lambda_threshold,connection_size_t,beta = 0.2, 4, 0.15
+  send_clusters_models_to_clients(list_clients,fl_server)
   for client in list_clients : 
     client.model, _, acc , client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
     client.round_acc.append(acc)
   
   distance_matrix = compute_distance_matrix(list_clients)
-  row_exp['num_clusters'] = one_shot(list_clients, cross_cluster_distance_clients,lambda_threshold,connection_size_t)
-  setattr(my_server, 'num_clusters', row_exp['num_clusters'])
-  my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+  print('Doing One Shot Clustering Initialization')
+  row_exp['num_clusters'] = one_shot(list_clients, distance_matrix ,lambda_threshold,connection_size_t)
+  setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
+  fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
   
   for round in range(row_exp['federated_rounds']):
-    refine(my_server,list_clients,row_exp)
-    return     
-  
-def refine(my_server : Server, list_clients : list, row_exp : dict, beta):
+    print('Refine step')
+    refine(fl_server,list_clients,row_exp,beta)
+
+  for client in list_clients :
+
+        acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    
+        setattr(client, 'accuracy', acc)
+
+  df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
+
+  return df_results 
+
+def refine(fl_server : Server, list_clients : list, row_exp : dict, beta):
   #STEP 1) Trimmed Mean on each cluster  
   for cluster_id in range(row_exp['num_clusters']) :
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
     cluster_client_gradients = [client.gradient for client in cluster_clients_list]
-    optimizer = torch.optim.SGD(my_server.cluster_models[cluster_id].parameters, lr =0.001)
-    my_server.cluster_models[cluster_id] = update_model_with_trimmed_gradients(my_server.cluster_models[cluster_id],cluster_client_gradients,beta,optimizer)
+    optimizer = torch.optim.SGD(fl_server.cluster_models[cluster_id].parameters, lr =0.001)
+    fl_server.cluster_models[cluster_id] = update_model_with_trimmed_gradients(fl_server.cluster_models[cluster_id],cluster_client_gradients,beta,optimizer)
   #STEP 2) Recluster
-  recluster(my_server,list_clients,row_exp)
+  recluster(fl_server,list_clients,row_exp)
   #STEP 3) Merge clusters
   # TO DO 
   
-def recluster(my_server, list_clients : list, row_exp : dict) : 
+def recluster(fl_server, list_clients : list, row_exp : dict) : 
   for client in list_clients:
     client_dist_to_clusters = []
-    for cluster_id in range(row_exp['number_of_cluster']):
-      client_dist_to_clusters.append(cross_cluster_distance_client_to_cluster(my_server,list_clients,cluster_id,client))
+    for cluster_id in range(row_exp['num_clusters']):
+      print(client_dist_to_clusters)
+      client_dist_to_clusters.append(cross_cluster_distance_client_to_cluster(fl_server,list_clients,cluster_id,client))
     client.cluster_id = np.argmin(client_dist_to_clusters)  
 
-def merge(my_server, list_clients : list, row_exp : dict, lambda_threshold,connection_size_t) : 
+def merge(fl_server, list_clients : list, row_exp : dict, lambda_threshold,connection_size_t) : 
   # To Do
   return
 def one_shot(list_clients : list, similarity_matrix : np.ndarray, lambda_threshold: float, connection_size_t: int) -> int :
@@ -77,7 +89,7 @@ def one_shot(list_clients : list, similarity_matrix : np.ndarray, lambda_thresho
   clusters_list = [c for c in nx.connected_components(G) if len(c) >= connection_size_t]
   
   # Set the client cluster id to its corresponding cluster
-  for cluster_id in len(clusters_list):
+  for cluster_id in range(len(clusters_list)):
     for client_id in clusters_list[cluster_id]:
         list_clients[client_id].cluster_id = cluster_id
     
@@ -103,20 +115,20 @@ def cross_cluster_distance_clients(client: Client, client2: Client) -> float:
     return 1/2 * (loss_calculation(client.model, client2.data_loader['train']) +
                   loss_calculation(client2.model, client.data_loader['train']))
     
-def cross_cluster_distance_client_to_cluster(my_server, list_clients, cluster_id, client: Client) -> float:
+def cross_cluster_distance_client_to_cluster(fl_server, list_clients, cluster_id, client: Client) -> float:
     from src.utils_fed import loss_calculation
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
 
     return 1/2 * (np.mean([loss_calculation(client.model, cluster_client.data_loader['train']) for cluster_client in cluster_clients_list]) +
-                  loss_calculation(my_server.cluster_models[cluster_id], client.data_loader['train']))
+                  loss_calculation(fl_server.cluster_models[cluster_id], client.data_loader['train']))
 
-def cross_cluster_distance_cluster_to_cluster(my_server, list_clients, cluster_id, cluster_id2) -> float:
+def cross_cluster_distance_cluster_to_cluster(fl_server, list_clients, cluster_id, cluster_id2) -> float:
     from src.utils_fed import loss_calculation
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
     cluster2_clients_list = [client for client in list_clients if client.cluster_id == cluster_id2] 
 
-    return 1/2 * (np.mean([loss_calculation(my_server.cluster_models[cluster_id], cluster_client.data_loader['train']) for cluster_client in cluster2_clients_list]) +
-                  np.mean([loss_calculation(my_server.cluster_models[cluster_id2], cluster_client.data_loader['train']) for cluster_client in cluster_clients_list]))
+    return 1/2 * (np.mean([loss_calculation(fl_server.cluster_models[cluster_id], cluster_client.data_loader['train']) for cluster_client in cluster2_clients_list]) +
+                  np.mean([loss_calculation(fl_server.cluster_models[cluster_id2], cluster_client.data_loader['train']) for cluster_client in cluster_clients_list]))
     
 def compute_distance_matrix(list_clients: list) -> np.ndarray:
     """
@@ -137,7 +149,7 @@ def compute_distance_matrix(list_clients: list) -> np.ndarray:
 
     for i in range(num_clients):
         for j in range(i + 1, num_clients):  # We only need to calculate for the upper triangle (matrix is symmetric)
-            dist = cross_cluster_distance(list_clients[i], list_clients[j])
+            dist = cross_cluster_distance_clients(list_clients[i], list_clients[j])
             distance_matrix[i, j] = dist
             distance_matrix[j, i] = dist  # Since the distance matrix is symmetric
 

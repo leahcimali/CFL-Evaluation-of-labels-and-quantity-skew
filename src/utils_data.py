@@ -327,7 +327,7 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
 
     Returns: 
-        model_server, list_clients: a nn model used the server in the FL protocol, a list of Client Objects used as nodes in the FL protocol
+        fl_server, list_clients: a nn model used the server in the FL protocol, a list of Client Objects used as nodes in the FL protocol
 
     """
 
@@ -345,14 +345,14 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
     if row_exp['nn_model'] == "linear":
         
-        model_server = Server(GenericLinearModel(in_size=imgs_params[row_exp['dataset']][0])) 
+        fl_server = Server(GenericLinearModel(in_size=imgs_params[row_exp['dataset']][0])) 
     
     elif row_exp['nn_model'] == "convolutional": 
         
-        model_server = Server(GenericConvModel(in_size=imgs_params[row_exp['dataset']][0], n_channels=imgs_params[row_exp['dataset']][1]))
+        fl_server = Server(GenericConvModel(in_size=imgs_params[row_exp['dataset']][0], n_channels=imgs_params[row_exp['dataset']][1]))
        
 
-    model_server.model.to(device)
+    fl_server.model.to(device)
 
     dict_clients = get_clients_data(row_exp['num_clients'],
                                     row_exp['num_samples_by_label'],
@@ -367,9 +367,9 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
     
     if row_exp['exp_type'] == "client":
 
-        init_server_cluster(model_server, list_clients, row_exp, imgs_params[row_exp['dataset']])
+        init_server_cluster(fl_server, list_clients, row_exp, imgs_params[row_exp['dataset']])
 
-    return model_server, list_clients
+    return fl_server, list_clients
 
 
 

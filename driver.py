@@ -47,7 +47,7 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clien
             return 
     try:
         
-        model_server, list_clients = setup_experiment(row_exp)
+        fl_server, list_clients = setup_experiment(row_exp)
     
     except Exception as e:
 
@@ -57,15 +57,16 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clien
 
         return 
     
-    launch_experiment(model_server, list_clients, row_exp, output_name)
+    launch_experiment(fl_server, list_clients, row_exp, output_name)
 
     return          
 
 
-def launch_experiment(model_server, list_clients, row_exp, output_name, save_results = True):
+def launch_experiment(fl_server, list_clients, row_exp, output_name, save_results = True):
         
         from src.utils_training import run_cfl_client_side, run_cfl_server_side, run_cfl_hybrid
         from src.utils_training import run_benchmark
+        from src.sr_fca import srfca
 
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
@@ -73,21 +74,22 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
 
             print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 
-            df_results = run_benchmark(model_server, list_clients, row_exp)
-        
+            df_results = run_benchmark(fl_server, list_clients, row_exp)
+        elif row_exp['exp_type'] =='srfca': 
+            df_results = srfca(fl_server,list_clients,row_exp)
         elif row_exp['exp_type'] == "pers-federated":
-            df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm='cheat',clustering_metric='none')
+            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='cheat',clustering_metric='none')
         elif row_exp['exp_type'] == "hybrid":
             print(f"Launching hybrid CFL experiment with parameters:\n {str_row_exp}")
             # Need to add other than KMeans
-            df_results = run_cfl_hybrid(model_server,list_clients,row_exp)
+            df_results = run_cfl_hybrid(fl_server,list_clients,row_exp)
         elif row_exp['exp_type'] == "client":
             
             print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
 
-            df_results = run_cfl_client_side(model_server, list_clients, row_exp)
+            df_results = run_cfl_client_side(fl_server, list_clients, row_exp)
         elif row_exp['exp_type'] == "server-nonponderated":
-            df_results = run_cfl_server_side(model_server, list_clients, row_exp,ponderated=False)
+            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,ponderated=False)
             
         elif row_exp['exp_type'].split('-')[0] == "server":
 
@@ -96,12 +98,12 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
             # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
             if len(row_exp['exp_type'].split('-')) == 1 :
                 print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(model_server, list_clients, row_exp)
+                df_results = run_cfl_server_side(fl_server, list_clients, row_exp)
             else : 
                 print('Using Agglomerative Clustering!')
                 algorithm = row_exp['exp_type'].split('-')[1]
                 clustering_metric = row_exp['exp_type'].split('-')[2]
-                df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm,clustering_metric)
+                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm,clustering_metric)
         elif row_exp['exp_type'].split('-')[0] == "iterative":
             #iterative server-side
             print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
@@ -109,15 +111,15 @@ def launch_experiment(model_server, list_clients, row_exp, output_name, save_res
             # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
             if len(row_exp['exp_type'].split('-')) == 2 :
                 print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(model_server, list_clients, row_exp,iterative=True)
+                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,iterative=True)
             elif row_exp['exp_type'].split('-')[2] == 'EDC'  :
                 print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(model_server, list_clients, row_exp,clustering_metric = 'EDC',iterative=True)
+                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,clustering_metric = 'EDC',iterative=True)
             else : 
                 print('Using Agglomerative Clustering!')
                 algorithm = row_exp['exp_type'].split('-')[2]
                 clustering_metric = row_exp['exp_type'].split('-')[3]
-                df_results = run_cfl_server_side(model_server, list_clients, row_exp,algorithm,clustering_metric,iterative=True)         
+                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm,clustering_metric,iterative=True)         
         else:
             
             str_exp_type = row_exp['exp_type']

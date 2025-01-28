@@ -48,9 +48,9 @@ def test_run_cfl_benchmark_oracle():
 
     row_exp = utils_extract_params(file_path) 
    
-    model_server, list_clients = setup_experiment(row_exp)
+    fl_server, list_clients = setup_experiment(row_exp)
 
-    df_results = run_benchmark(model_server, list_clients, row_exp)
+    df_results = run_benchmark(fl_server, list_clients, row_exp)
 
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 
@@ -68,9 +68,9 @@ def test_run_cfl_benchmark_fl():
 
     row_exp = utils_extract_params(file_path) 
    
-    model_server, list_clients = setup_experiment(row_exp)
+    fl_server, list_clients = setup_experiment(row_exp)
 
-    df_results = run_benchmark(model_server, list_clients, row_exp)
+    df_results = run_benchmark(fl_server, list_clients, row_exp)
 
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 
@@ -88,9 +88,9 @@ def test_run_cfl_client_side():
 
     row_exp = utils_extract_params(file_path) 
    
-    model_server, list_clients = setup_experiment(row_exp)
+    fl_server, list_clients = setup_experiment(row_exp)
 
-    df_results =  run_cfl_client_side(model_server, list_clients, row_exp)
+    df_results =  run_cfl_client_side(fl_server, list_clients, row_exp)
 
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 
@@ -108,9 +108,9 @@ def test_run_cfl_server_side():
 
     row_exp = utils_extract_params(file_path) 
    
-    model_server, list_clients = setup_experiment(row_exp)
+    fl_server, list_clients = setup_experiment(row_exp)
 
-    df_results =  run_cfl_server_side(model_server, list_clients, row_exp)
+    df_results =  run_cfl_server_side(fl_server, list_clients, row_exp)
 
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 

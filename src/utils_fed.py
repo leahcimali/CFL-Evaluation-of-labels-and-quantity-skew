@@ -153,8 +153,58 @@ def model_weight_matrix(my_server : Server, list_clients : list,  model_update: 
     weight_matrix = pd.DataFrame(weight_matrix_np, columns=[f'w_{i+1}' for i in range(weight_matrix_np.shape[1])])
 
     return weight_matrix
+
+def model_similarity_matrix(my_server : Server, list_clients : list, metric: str = 'distcross_cluster', model_update: bool = False):
+    """
+    Compute the dissimilarity between a client model and a server model based on the specified metric.
+
+    Args:
+        my_server : FL server
+        list_clients: List containing all clients
+        server_model: The server model.
+        metric: The metric to compute. Options: 
+            - 'cosine_similarity': Cosine similarity.
+            - 'euclidean': Euclidean distance.
+            - 'distcross_cluster': Cross-cluster distance.
+
+    Returns:
+        The computed dissimilarity value.
+    """
+    import torch
+    from scipy.spatial.distance import pdist, squareform
+    from sklearn.metrics.pairwise import cosine_similarity
+    weight_matrix = model_weight_matrix(my_server,list_clients).to_numpy()
+
+    if metric == 'cosine_similarity':
+        # Cosine similarity
+        return cosine_similarity(weight_matrix)
+
+    elif metric == 'euclidean':
+        distance_matrix = pdist(weight_matrix, metric='euclidean')
+
+        # Convert to a square distance matrix
+        square_distance_matrix = squareform(distance_matrix)
+
+        # Optional: Convert distance to similarity (e.g., inverse of distance)
+        similarity_matrix = 1 / (1 + square_distance_matrix)
+
+        # Convert to DataFrame for readability (optional)
+        similarity_df = pd.DataFrame(similarity_matrix, index=df.index, columns=df.index)
+
+        return similarity_df
+
+    elif metric == 'distcross_cluster':
+        # Cross-cluster distance: (1/2) * (f_i(w_j) + f_j(w_i))
+        # Here, f_i(w_j) is the dissimilarity between server_model and client.model
+        # and f_j(w_i) is the dissimilarity between client.model and server_model
+        f_i_w_j = model_similarity(client, server_model, 'cosine_dissimilarity')
+        f_j_w_i = model_similarity(client, server_model, 'cosine_dissimilarity')
+        return (f_i_w_j + f_j_w_i) / 2
+
+    else:
+        raise ValueError(f"Unknown metric: {metric}. Supported metrics are: 'cosine_similarity', 'cosine_dissimilarity', 'euclidean', 'MADC', 'distcross_cluster'.")
     
-def model_dissimilarity(client : list, server_model : list) :
+def model_similarity(client : list, server_model : list) :
     from sklearn.metrics.pairwise import cosine_similarity
     server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0).cpu()
     client_weights = torch.cat([param.detach().flatten() for param in client.model.parameters()]).unsqueeze(0).cpu()
@@ -163,7 +213,7 @@ def model_dissimilarity(client : list, server_model : list) :
 
 def client_migration(my_server,client):
 
-    client_server_dissimilarity = [(cluster_id,model_dissimilarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
+    client_server_dissimilarity = [(cluster_id,model_similarity(client, server_model)) for cluster_id, server_model in my_server.clusters_models.items()]
     dissimilarity_values = [dissimilarity for _, dissimilarity in client_server_dissimilarity]
 
     #Find the index of the minimum dissimilarity

@@ -8,6 +8,8 @@ import pandas as pd
 from src.models import ImageClassificationBase
 from src.fedclass import Server
 
+    
+        
 
 def ColdStart(my_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = True, alpha :int =6)-> None:
     """ Cold start clustering for iterative server-side CFL. Create first clustering iteration using a subsample of all clients. 
@@ -31,7 +33,8 @@ def ColdStart(my_server : Server, list_clients : list, row_exp : dict, algorithm
     #unselected_clients = [client for client in list_clients if client not in selected_clients]
     send_clusters_models_to_clients(selected_clients, my_server)
     for client in selected_clients :
-        client.model, _, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _, acc , client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.round_acc.append(acc)
         if algorithm != 'kmeans' :
             Agglomerative_Clustering(my_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
         else: 
@@ -67,7 +70,9 @@ def FedGroup(my_server : Server, list_clients : list, row_exp : dict, algorithm 
         send_clusters_models_to_clients(selected_clients, my_server)
         
         for client in selected_clients:
-            client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.round_acc.append(acc)
+
             if client.cluster_id is None:
                 client_migration(my_server, client)
 
@@ -160,7 +165,8 @@ def run_cfl_client_side(my_server : Server, list_clients : list, row_exp : dict,
 
         for client in list_clients:
 
-            client.model, _, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _, acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.round_acc.append(acc)
 
         fedavg(my_server, list_clients,ponderated)
 
@@ -206,7 +212,9 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
     my_server.clusters_models= {cluster_id: copy.deepcopy(my_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(my_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
-        client.model, _ , _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _ , acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.round_acc.append(acc)
+    
     for round in range(row_exp['federated_rounds']):
         if algorithm == 'agglomerative' :
             Agglomerative_Clustering(my_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
@@ -216,13 +224,17 @@ def run_cfl_hybrid(my_server : Server, list_clients : list, row_exp : dict, algo
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
         for client in list_clients:
-            client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.round_acc.append(acc)
+
     for round in range(row_exp['federated_rounds']):
         fedavg(my_server, list_clients)
         set_client_cluster(my_server, list_clients, row_exp)
         if round != row_exp['federated_rounds']//2 -1 :
             for client in list_clients:
-                client.model, _ , _, _= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+                client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+                client.round_acc.append(acc)
+
     for client in list_clients :
 
         acc = test_model(my_server.clusters_models[client.cluster_id], client.data_loader['test'])    
@@ -331,7 +343,8 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
-            client.model, curr_acc, _, _ = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
+            client.model, curr_acc, val_acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
+            client.round_acc.append(val_acc)
             accs.append(curr_acc)
             fedavg(main_model, list_clients,ponderated)
 
@@ -368,8 +381,8 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
 
     Returns:
-        (model, history, final_val_acc, avg_grad) : Trained model, training history, 
-        final validation accuracy, and average gradient vector
+        (model, history, final_val_acc, avg_grad) : Trained model, final train loss of the trained model, 
+        validation set accuracy of the trained model, and average gradient vector
     """
     import copy
 
@@ -432,10 +445,10 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         history.append(result)
 
     # Final validation accuracy
-    final_val_acc = test_model(model, val_loader)
-    print(final_val_acc)
-    print(avg_grad)
-    return model, history, final_val_acc, avg_grad
+    val_acc = test_model(model, val_loader)
+    train_loss = torch.stack(train_losses).mean().item()
+
+    return model, train_loss, val_acc, avg_grad
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

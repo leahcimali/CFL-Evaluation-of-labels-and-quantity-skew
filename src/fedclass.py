@@ -34,6 +34,8 @@ class Client:
         self.heterogeneity_class = None
         self.accuracy = 0
         self.skew = 'none'
+        self.round_val = []
+        self.gradient = None
 
     def __eq__(self, value: object) -> bool:
         return (self.id == value.id and

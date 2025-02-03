@@ -425,15 +425,19 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
 
             # Accumulate gradients
             for i, param in enumerate(model.parameters()):
-                avg_grad[i] += param.grad.clone().detach()
+                if param.grad is None:  # **Change: Check for None gradients**
+                    print(f"Gradient is None for parameter {i}")
+                else:
+                    avg_grad[i] += param.grad.clone().detach()  # **Change: Ensure gradients are tensors**
 
             # Optimization step
             optimizer.step()
             optimizer.zero_grad()
         
         # Normalize gradients to compute the average
-        for i in range(len(avg_grad)):
-            avg_grad[i] /= num_batches
+        if num_batches > 0:  # **Change: Check if num_batches > 0 to avoid division by zero**
+            for i in range(len(avg_grad)):
+                avg_grad[i] /= num_batches
 
         # Validation step
         result = evaluate(model, val_loader)  # Ensure evaluate handles CUDA as needed
@@ -446,8 +450,9 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
     # Final validation accuracy
     val_acc = test_model(model, val_loader)
     train_loss = torch.stack(train_losses).mean().item()
-
+    
     return model, train_loss, val_acc, avg_grad
+
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

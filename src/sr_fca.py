@@ -7,24 +7,47 @@ import torch.optim as optim
 import pandas as pd
 import copy
 
-def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
-  from src.utils_fed import send_clusters_models_to_clients, model_weight_matrix
-  from src.utils_training import train_central,test_model
-  from src.sr_fca import one_shot
-  #SRFCA hyperparameters
-  lambda_threshold,connection_size_t,beta = 0.9, 2, 0.1
-  send_clusters_models_to_clients(list_clients,fl_server)
-  for client in list_clients : 
-    client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
-    client.round_acc.append(acc)
-  
-  distance_matrix = compute_distance_matrix(list_clients)
-  print(distance_matrix)
-  print('Doing One Shot Clustering Initialization')
+def hyper_parameters(row_exp)-> tuple: 
+  """
+    Determine hyperparameters based on the experiment's dataset and heterogeneity type.
 
+    Arguments:
+        row_exp (dict): A dictionary containing experiment configurations, 
+                        including dataset type and heterogeneity type.
+
+    Returns:
+        tuple: A tuple containing the lambda_threshold, connection_size_t, and beta values.
+    """
+  
+  lambda_threshold,connection_size_t,beta = 0.9, 2, 0
+  if row_exp['dataset'] == 'mnist':
+    if row_exp['heterogeneity_type'] == 'concept-shift-on-features':
+      lambda_threshold,connection_size_t,beta = 0.9, 2, 0
+    elif row_exp['heterogeneity_type'] == 'features-distribution-skew':
+      lambda_threshold,connection_size_t,beta = 1.38, 4, 0
+  
+  return lambda_threshold,connection_size_t,beta
+
+def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
+  """
+    Perform the SRFCA (Self-Refining Federated Clustering Algorithm) for federated learning.
+
+    Arguments:
+        fl_server (Server): The federated learning server that holds the global model and cluster models.
+        list_clients (list): A list of client objects participating in the federated learning process.
+        row_exp (dict): A dictionary containing experiment parameters including number of federated rounds and clustering settings.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the results (such as accuracy) for each client after federated rounds.
+    """
+  
+  from src.utils_training import test_model
+  #SRFCA hyperparameters
+  lambda_threshold,connection_size_t,beta = hyper_parameters(row_exp)
+  print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
   # ONE_SHOT STEP
 
-  row_exp['num_clusters'] = one_shot(list_clients, distance_matrix ,lambda_threshold,connection_size_t)
+  row_exp['num_clusters'] = one_shot(fl_server,list_clients,row_exp,lambda_threshold,connection_size_t)
   fl_server.num_clusters = row_exp['num_clusters']
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
   print('Initialized Clusters : '+ str(fl_server.num_clusters))
@@ -47,21 +70,52 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
 
   return df_results 
 
-def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, lambda_threshold : float,connection_size_t : int,refine_step = False):
+def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, lambda_threshold : float,connection_size_t : int,refine_step = False)-> None:
+  """
+    Refine the model aggregation and cluster assignments for clients by performing 
+    trimmed mean aggregation and optionally reclustering and merging.
+
+    Arguments:
+        fl_server (Server): The federated learning server containing the global and cluster models.
+        list_clients (list): A list of client objects involved in federated learning.
+        row_exp (dict): A dictionary containing experiment parameters, including the number of clusters and federated rounds.
+        beta (float): The fraction of extreme values to trim during the aggregation process.
+        lambda_threshold (float): The threshold for cluster distance to determine if clusters should merge.
+        connection_size_t (int): The minimum size of connected components to consider during merging.
+        refine_step (bool, optional): Whether to perform reclustering and merging after aggregation. Default is False.
+
+    Returns:
+        None: This function modifies the server model and client assignments in place.
+    """
+  
   #STEP 1) Trimmed Mean on each cluster 
   print('trimmed Mean Step')
   for cluster_id in range(row_exp['num_clusters']) :
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
-    trimmed_mean = trimmed_mean_beta_aggregation(cluster_clients_list,beta)
+    trimmed_mean = trimmed_mean_beta_aggregation(cluster_clients_list,row_exp,beta)
     fl_server.clusters_models[cluster_id] = update_server_model(fl_server.clusters_models[cluster_id],trimmed_mean)
+  if refine_step == True :
+    #STEP 2) Recluster
+    print('Recluster')
+    recluster(fl_server,list_clients,row_exp)
 
-  #STEP 2) Recluster
-  print('Recluster')
+    #STEP 3) Merge
+    print('Merge')
+    fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
+
+def recluster(fl_server: Server, list_clients : list, row_exp : dict)-> None : 
+  """
+    Reassign clients to clusters based on their distance to cluster models.
+
+    Arguments:
+        fl_server (Server): The federated learning server containing cluster models.
+        list_clients (list): A list of client objects involved in federated learning.
+        row_exp (dict): A dictionary containing experiment parameters such as the number of clusters.
+
+    Returns:
+        None: This function modifies the client cluster assignments in place.
+    """
   
-  recluster(fl_server,list_clients,row_exp)
-  fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
-
-def recluster(fl_server, list_clients : list, row_exp : dict) : 
   for client in list_clients:
     client_dist_to_clusters = []
     for cluster_id in range(row_exp['num_clusters']):
@@ -112,7 +166,7 @@ def merge(fl_server: Server,list_clients : list,
 
   return num_clusters
 
-def one_shot(list_clients : list, similarity_matrix : np.ndarray, lambda_threshold: float, connection_size_t: int) -> int :
+def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_threshold: float, connection_size_t: int) -> int :
   """
   Creates a graph from a similarity matrix with edges based on a threshold.
 
@@ -124,7 +178,19 @@ def one_shot(list_clients : list, similarity_matrix : np.ndarray, lambda_thresho
   Returns: 
     Number of initial cluster
     """
+  from src.utils_fed import send_clusters_models_to_clients
+  from src.utils_training import train_central
+  send_clusters_models_to_clients(list_clients,fl_server)
+
+  # First Training
+  for client in list_clients : 
+    client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+    client.round_acc.append(acc)
   
+  # Distance Matrix for ONE-SHOT Step
+  similarity_matrix = compute_distance_matrix(list_clients)
+  print(similarity_matrix)
+  print('Doing One Shot Clustering Initialization')
   num_clients = len(list_clients)
   G = nx.Graph()
 
@@ -242,7 +308,7 @@ def compute_distance_matrix(list_clients: list) -> np.ndarray:
 import torch
 import torch.nn as nn
 
-def trimmed_mean_beta_aggregation(list_clients, beta):
+def trimmed_mean_beta_aggregation(list_clients,row_exp, beta)-> dict:
     """
     Compute the average parameter updates across multiple clients after trimming outliers 
     using the Trimmed Mean Beta (TMB) method.
@@ -254,19 +320,22 @@ def trimmed_mean_beta_aggregation(list_clients, beta):
     Returns:
         avg_update : Dictionary of averaged parameter updates after trimming
     """
+    from src.utils_training import train_central
     # Initialize a dictionary to accumulate the updates for each parameter
     avg_update = {}
 
     # Iterate over the list of clients
     for client in list_clients:
-        # Iterate over each parameter update in the client's update
-        for name, update_tensor in client.update.items():
-            if name in avg_update:
-                # Accumulate the updates
-                avg_update[name].append(update_tensor)
-            else:
-                # Initialize the accumulator for this parameter
-                avg_update[name] = [update_tensor]
+      client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+      client.round_acc.append(acc)
+      # Iterate over each parameter update in the client's update
+      for name, update_tensor in client.update.items():
+          if name in avg_update:
+              # Accumulate the updates
+              avg_update[name].append(update_tensor)
+          else:
+              # Initialize the accumulator for this parameter
+              avg_update[name] = [update_tensor]
 
     # Now, apply trimming and calculate the average for each parameter update
     num_clients = len(list_clients)
@@ -286,52 +355,8 @@ def trimmed_mean_beta_aggregation(list_clients, beta):
         avg_update[name] = torch.mean(trimmed_updates, dim=0)
 
     return avg_update
-'''
-def trimmed_mean_beta_aggregation(list_clients, beta):
-    """
-    Aggregate client weight updates using Trimmed Mean Beta (TMB) method.
-    
-    Arguments:
-        list_clients : List of client instances with trained models and weight updates
-        beta : Fraction of extreme values to trim (e.g., 0.1 for 10%)
-    
-    Returns:
-        avg_update : Averaged weight updates after trimming
-    """
-    # Collect weight updates from all clients
-    all_updates = [client.update for client in list_clients]
-    
-    # Initialize list to hold the trimmed mean updates
-    avg_update = []
-    
-    # Iterate over each parameter
-    for param_idx in range(len(all_updates[0])):
-        # Collect updates for the current parameter from all clients
-        param_updates = [update[param_idx] for update in all_updates]
-        
-        # Stack updates into a tensor
-        param_updates = torch.stack(param_updates)
-        
-        # Sort the updates along the batch dimension
-        sorted_updates, _ = torch.sort(param_updates, dim=0)
-        
-        # Calculate the number of updates to trim
-        num_clients = len(list_clients)
-        trim_size = int(beta * num_clients)
-        
-        # Trim the top and bottom 'trim_size' updates
-        trimmed_updates = sorted_updates[trim_size:num_clients - trim_size]
-        
-        # Compute the mean of the remaining updates
-        mean_updates = torch.mean(trimmed_updates, dim=0)
-        
-        # Append the trimmed mean update to the result list
-        avg_update.append(mean_updates)
-    
-    return avg_update
-'''
 
-def update_server_model(model, update):
+def update_server_model(model, update)-> nn.Module:
     """
     Apply the weight update to the model parameters.
 
@@ -351,20 +376,3 @@ def update_server_model(model, update):
                 model.state_dict()[name].sub_(update_tensor)
 
     return model
-'''
-def update_server_model(fl_server_model, avg_update):
-    """
-    Update the global model using the averaged weight updates.
-    
-    Arguments:
-        fl_server_model : The global model to be updated
-        avg_update : Averaged weight updates
-        learning_rate : Learning rate for the update
-    """
-    with torch.no_grad():
-        for param, update in zip(fl_server_model.parameters(), avg_update):
-            # Update the global model parameters
-            param -=  update
-
-    return fl_server_model
-'''

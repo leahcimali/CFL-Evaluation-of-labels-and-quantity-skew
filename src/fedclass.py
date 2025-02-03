@@ -35,8 +35,8 @@ class Client:
         self.accuracy = 0
         self.skew = 'none'
         self.round_acc = []
+        self.update = None
         self.gradient = None
-
     def __eq__(self, value: object) -> bool:
         return (self.id == value.id and
                 self.model == value.model and

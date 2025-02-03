@@ -32,7 +32,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
     send_clusters_models_to_clients(selected_clients, fl_server)
     for client in selected_clients :
-        client.model, _, acc , client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
         if algorithm != 'kmeans' :
             Agglomerative_Clustering(fl_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
@@ -69,7 +69,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         send_clusters_models_to_clients(selected_clients, fl_server)
         
         for client in selected_clients:
-            client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
             if client.cluster_id is None:
@@ -164,7 +164,7 @@ def run_cfl_client_side(fl_server : Server, list_clients : list, row_exp : dict,
 
         for client in list_clients:
 
-            client.model, _, acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _, acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
         fedavg(fl_server, list_clients,ponderated)
@@ -211,7 +211,7 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
-        client.model, _ , acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _ , acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
     
     for round in range(row_exp['federated_rounds']):
@@ -223,7 +223,7 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
-            client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
     for round in range(row_exp['federated_rounds']):
@@ -231,7 +231,7 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
         set_client_cluster(fl_server, list_clients, row_exp)
         if round != row_exp['federated_rounds']//2 -1 :
             for client in list_clients:
-                client.model, _ , acc, client.gradient= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+                client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
                 client.round_acc.append(acc)
 
     for client in list_clients :
@@ -342,7 +342,7 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
-            client.model, curr_acc, val_acc, client.gradient = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
+            client.model, curr_acc, val_acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
             client.round_acc.append(val_acc)
             accs.append(curr_acc)
             fedavg(main_model, list_clients,ponderated)
@@ -367,8 +367,10 @@ def evaluate(model : nn.Module, val_loader : DataLoader) -> dict:
         outputs.append(output)
     return model.validation_epoch_end(outputs)
 
+
+
 def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
-                  row_exp: dict, mu: float = 0.0):
+                  row_exp: dict, mu: float = 0.0, lr = 0.001, opt_func = torch.optim.Adam):
     """
     Main training function for centralized learning with optional FedProx regularization.
     
@@ -391,8 +393,6 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         server_model.to(device)
 
     # Optimizer setup
-    opt_func = torch.optim.Adam
-    lr = 0.001
     history = []
     optimizer = opt_func(model.parameters(), lr)
 
@@ -451,8 +451,11 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
     val_acc = test_model(model, val_loader)
     train_loss = torch.stack(train_losses).mean().item()
     
-    return model, train_loss, val_acc, avg_grad
-
+    weight_update = {}
+    for name, param in model.named_parameters():
+        if name in server_model.state_dict():
+            weight_update[name] = param.data - server_model.state_dict()[name]
+    return model, train_loss, val_acc, weight_update
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

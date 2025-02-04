@@ -32,7 +32,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
     send_clusters_models_to_clients(selected_clients, fl_server)
     for client in selected_clients :
-        client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
         if algorithm != 'kmeans' :
             Agglomerative_Clustering(fl_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
@@ -72,7 +72,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         send_clusters_models_to_clients(selected_clients, fl_server)
         
         for client in selected_clients:
-            client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
             if client.cluster_id is None:
@@ -170,7 +170,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict,pondera
 
         for client in list_clients:
 
-            client.model, _, acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _, acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
         fedavg(fl_server, list_clients,ponderated)
@@ -217,7 +217,7 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
-        client.model, _ , acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+        client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
     
     for round in range(row_exp['rounds']):
@@ -229,7 +229,7 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
-            client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
     for round in range(row_exp['rounds']):
@@ -237,7 +237,7 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
         set_client_cluster(fl_server, list_clients, row_exp)
         if round != row_exp['rounds']//2 -1 :
             for client in list_clients:
-                client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+                client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
                 client.round_acc.append(acc)
 
     for client in list_clients :
@@ -278,7 +278,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         for heterogeneity_class in list_heterogeneities:
             list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
             train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
-            model_trained, _, _, _ = train_central(curr_model, train_loader, val_loader, row_exp) 
+            model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
 
             global_acc = test_model(model_trained, test_loader) 
                     
@@ -346,7 +346,7 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
-            client.model, curr_acc, val_acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu)
+            client.model, curr_acc, val_acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, fedprox_mu)
             client.round_acc.append(val_acc)
             accs.append(curr_acc)
             fedavg(main_model, list_clients,ponderated)
@@ -373,10 +373,10 @@ def evaluate(model : nn.Module, val_loader : DataLoader) -> dict:
 
 
 
-def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
+def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
                   row_exp: dict, mu: float = 0.0, lr = 0.001, opt_func = torch.optim.Adam):
     """
-    Main training function for centralized learning with optional FedProx regularization.
+    Main training function for local or centralized learning with optional FedProx regularization.
     
     Arguments:
         model : Local model to be trained
@@ -386,8 +386,8 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
         mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
 
     Returns:
-        (model, history, final_val_acc, avg_grad) : Trained model, final train loss of the trained model, 
-        validation set accuracy of the trained model, and average gradient vector
+        (model, history, final_val_acc, weight_update) : Trained model, final train loss of the trained model, 
+        validation set accuracy of the trained model, and the weights update of the model
     """
     import copy
 
@@ -674,12 +674,12 @@ def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_thre
     Number of initial cluster
     """
   from src.utils_fed import send_clusters_models_to_clients
-  from src.utils_training import train_central
+  from src.utils_training import train_model
   send_clusters_models_to_clients(list_clients,fl_server)
 
   # First Training
   for client in list_clients : 
-    client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+    client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
     client.round_acc.append(acc)
   
   # Distance Matrix for ONE-SHOT Step
@@ -720,13 +720,13 @@ def trimmed_mean_beta_aggregation(list_clients,row_exp, beta)-> dict:
     Returns:
         avg_update : Dictionary of averaged parameter updates after trimming
     """
-    from src.utils_training import train_central
+    from src.utils_training import train_model
     # Initialize a dictionary to accumulate the updates for each parameter
     avg_update = {}
 
     # Iterate over the list of clients
     for client in list_clients:
-      client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+      client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
       client.round_acc.append(acc)
       # Iterate over each parameter update in the client's update
       for name, update_tensor in client.update.items():

@@ -24,7 +24,7 @@ exp_type, params
 
         fedgroup, <metric>: FedGroup Algorithm 
 
-        srfca, (lambda, beta): Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm. 
+        srfca,"(<lambda>,<beta>)": Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm. <lambda> is the distance threshold for clustering, <beta> is the trimmed mean parameter
         
         cornsflqs, <metric> : cornsflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
 

@@ -8,7 +8,7 @@ import click
 
 @click.command()
 @click.option('--exp_type', help="The experiment type to run")
-@click.option('--params', help="Hyperparmaeters specific to exp type, if in bad format or void, will use defaults")
+@click.option('--params', help="Parameters specific to exp type, if in bad format or void, will use defaults")
 @click.option('--dataset')
 @click.option('--nn_model', help= "The training model to use ('linear (default) or 'convolutional')")
 @click.option('--heterogeneity_type', help="The data heterogeneity to test (or dataset)")
@@ -85,7 +85,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         elif row_exp['exp_type'] == "cornsflqs":
             print(f"Launching cornsflqs CFL experiment with parameters:\n {str_row_exp}")
             # Need to add other than KMeans
-            df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp)
+            df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric=row_exp['params'])
         
         elif row_exp['exp_type'] == "IFCA":
             

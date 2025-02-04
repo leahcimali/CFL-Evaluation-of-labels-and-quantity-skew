@@ -332,7 +332,7 @@ def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_cluster
         ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)
         weight_matrix = affinity_matrix
     else: 
-        ac = AgglomerativeClustering(n_clusters=num_clusters,metric=clustering_metric,linkage=linkage_type)
+        ac = AgglomerativeClustering(n_clusters=num_clusters, metric=clustering_metric, linkage=linkage_type)
     
     ac.fit(weight_matrix)
     

@@ -44,7 +44,7 @@ def test_run_cfl_benchmark_oracle():
     from src.utils_data import setup_experiment    
     from src.utils_training import run_benchmark
 
-    file_path = Path("tests/refs/pers-centralized_fashion-mnist_linear_features-distribution-skew_8_100_3_5_5_42.csv")
+    file_path = Path("tests/refs/oracle-centralized_fashion-mnist_linear_features-distribution-skew_8_100_3_5_5_42.csv")
 
     row_exp = utils_extract_params(file_path) 
    
@@ -64,7 +64,7 @@ def test_run_cfl_benchmark_fl():
     from src.utils_data import setup_experiment    
     from src.utils_training import run_benchmark
 
-    file_path = Path("tests/refs/global-federated_fashion-mnist_linear_features-distribution-skew_8_100_3_5_5_42.csv")
+    file_path = Path("tests/refs/federated_fashion-mnist_linear_features-distribution-skew_8_100_3_5_5_42.csv")
 
     row_exp = utils_extract_params(file_path) 
    
@@ -75,14 +75,14 @@ def test_run_cfl_benchmark_fl():
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 
 
-def test_run_cfl_client_side():
+def test_run_cfl_IFCA():
 
     from pathlib import Path
     import numpy as np
     import pandas as pd
 
     from src.utils_data import setup_experiment    
-    from src.utils_training import run_cfl_client_side
+    from src.utils_training import run_cfl_IFCA
 
     file_path = Path("tests/refs/client_fashion-mnist_linear_features-distribution-skew_8_100_3_5_5_42.csv")
 
@@ -90,7 +90,7 @@ def test_run_cfl_client_side():
    
     fl_server, list_clients = setup_experiment(row_exp)
 
-    df_results =  run_cfl_client_side(fl_server, list_clients, row_exp)
+    df_results =  run_cfl_IFCA(fl_server, list_clients, row_exp)
 
     assert all(np.isclose(df_results['accuracy'], pd.read_csv(file_path)['accuracy'], rtol=0.01))
 
@@ -116,7 +116,7 @@ def test_run_cfl_server_side():
 
 
 if __name__ == "__main__":
-    test_run_cfl_client_side()
+    test_run_cfl_IFCA()
     test_run_cfl_server_side()
     test_run_cfl_benchmark_fl()
     test_run_cfl_benchmark_oracle()

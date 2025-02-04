@@ -41,7 +41,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     fedavg(fl_server, selected_clients,ponderated= ponderated)
     return
 
-def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True, alpha :int =6)-> None:
+def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True, alpha :int =6)-> pd.DataFrame:
     """ FedGroup for one communication round
     Credit -> Inspired by https://github.com/morningD/FlexCFL
     
@@ -54,6 +54,9 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         clustering_metric : Euclidean, cosine or MADC
         alpha : Parameter for client selection
         coldstart : If the cold start algorithm is done 
+     Returns:
+
+        df_results : dataframe with the experiment results
     """
     import random
     from src.utils_fed import fedavg, send_clusters_models_to_clients,client_migration
@@ -80,7 +83,15 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         # Update round counter only if within federated rounds
         if round_counter < row_exp['rounds']:
             round_counter += 1
-    return
+    for client in list_clients :
+
+        acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    
+        setattr(client, 'accuracy', acc)
+
+    df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
+
+    return df_results 
+
     
 def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',iterative = False,ponderated = True) -> pd.DataFrame:
     
@@ -106,31 +117,26 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
 
     torch.manual_seed(row_exp['seed'])
     
-    if iterative == True :
-        FedGroup(fl_server,list_clients,row_exp,algorithm,clustering_metric,ponderated)      
-    else:
-        cold_start = row_exp
-        cold_start['rounds'] = 2 
-        fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=ponderated)
-        fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
-        setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
+    fl_server = train_federated(fl_server, list_clients, row_exp['rounds']//2, use_clusters_models = False, ponderated=ponderated)
+    fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+    setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
         
-        if algorithm == 'cheat':
-            # Use Personalized for Clustered Federated Learning with knowledge of client heterogeneity class
-            # Used as a benchmark for CFL.
-            print('Using personalized Federated Learning!')
-            heterogeneity_classes = set([client.heterogeneity_class for client in list_clients])
-            cluster_mapping = {cls: idx for idx, cls in enumerate(heterogeneity_classes)}
-            for client in list_clients:
-                client.cluster_id = cluster_mapping[client.heterogeneity_class]        
+    if algorithm == 'oracle-CFL':
+        # Use Personalized for Clustered Federated Learning with knowledge of client heterogeneity class
+        # Used as a benchmark for CFL.
+        print('Using personalized Federated Learning!')
+        heterogeneity_classes = set([client.heterogeneity_class for client in list_clients])
+        cluster_mapping = {cls: idx for idx, cls in enumerate(heterogeneity_classes)}
+        for client in list_clients:
+            client.cluster_id = cluster_mapping[client.heterogeneity_class]        
 
-        elif algorithm == 'agglomerative' :
-            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
-        
-        elif algorithm == 'kmeans': 
-            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
+    elif algorithm == 'agglomerative' :
+        Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+    
+    elif algorithm == 'kmeans': 
+        k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
 
-        fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = True)
+    fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = True)
 
     for client in list_clients :
 
@@ -142,7 +148,7 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
     return df_results 
 
 
-def run_cfl_client_side(fl_server : Server, list_clients : list, row_exp : dict,ponderated : bool = True) -> pd.DataFrame:
+def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict,ponderated : bool = True) -> pd.DataFrame:
 
     """ Driver function for client-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights (k-means).
@@ -180,7 +186,7 @@ def run_cfl_client_side(fl_server : Server, list_clients : list, row_exp : dict,
     
     return df_results
 
-def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = False) -> pd.DataFrame:
+def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = False) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -267,7 +273,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
 
     curr_model = fl_server.model
 
-    if row_exp['exp_type'] == 'pers-centralized':
+    if row_exp['exp_type'] == 'oracle-centralized':
         curr_model = fl_server.model
         for heterogeneity_class in list_heterogeneities:
             list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
@@ -280,7 +286,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     
                 setattr(client, 'accuracy', global_acc)
     
-    elif row_exp['exp_type'] == 'global-federated':
+    elif row_exp['exp_type'] == 'federated':
                 
         model_trained = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False)
 
@@ -290,13 +296,14 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         for client in list_clients : 
     
             setattr(client, 'accuracy', global_acc)
-    elif row_exp['exp_type'].split('-')[0] == 'fedprox':
-        if len(row_exp['exp_type'].split('-')) == 2:
-            mu = float(row_exp['exp_type'].split('-')[1])
-            row_exp['exp_type'] = 'fedprox'
-        else :
-            mu =0.01
-        model_trained = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, fedprox=mu)
+
+    elif row_exp['exp_type'] == 'fedprox':
+        try:
+            mu = float(row_exp['params'])  
+        except (TypeError, ValueError):  
+            mu = 0.01  
+        
+        model_trained = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, fedprox_mu=mu)
 
         _, _,test_loader = centralize_data(list_clients,row_exp)
         global_acc = test_model(model_trained.model, test_loader) 
@@ -310,7 +317,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     return df_results
 
 
-def train_federated(main_model, list_clients, row_exp, use_clusters_models = False, ponderated = True,fedprox = False):
+def train_federated(main_model, list_clients, row_exp, use_clusters_models = False, ponderated = True, fedprox_mu : float = 0):
     
     """Controler function to launch federated learning
 
@@ -320,14 +327,11 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
         list_clients: A list of Client Objects used as nodes in the FL protocol  
         row_exp: The current experiment's global parameters
         use_clusters_models: Boolean to determine whether to use personalization by clustering
-        fedprox : Boolean to determine whether to use fedprox 
+        fedprox_mu : value of mu for fedprox, if 0 do standard FedAVG
     """
     
     from src.utils_fed import send_server_model_to_client, send_clusters_models_to_clients, fedavg
-    if fedprox :
-        mu =fedprox
-    else : 
-        mu =0
+    
     for i in range(0, row_exp['rounds']):
 
         accs = []
@@ -506,3 +510,269 @@ def test_model(model: nn.Module, test_loader: DataLoader) -> float:
     accuracy = (correct / total) * 100
 
     return accuracy
+
+import networkx as nx
+import numpy as np
+from src.fedclass import Server, Client
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import pandas as pd
+import copy
+
+from src.metrics import cross_cluster_distance_client_to_cluster, cross_cluster_distance_cluster_to_cluster, compute_distance_matrix
+
+def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
+  """
+    Perform the SRFCA (Self-Refining Federated Clustering Algorithm) for federated learning.
+
+    Arguments:
+        fl_server (Server): The federated learning server that holds the global model and cluster models.
+        list_clients (list): A list of client objects participating in the federated learning process.
+        row_exp (dict): A dictionary containing experiment parameters including number of federated rounds and clustering settings.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the results (such as accuracy) for each client after federated rounds.
+    """
+  import ast
+  from src.utils_training import test_model
+  #SRFCA hyperparameters
+  lambda_threshold, beta = ast.literal_eval(row_exp['params'])
+  connection_size_t = 2 
+  print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
+  # ONE_SHOT STEP
+
+  row_exp['num_clusters'] = one_shot(fl_server,list_clients,row_exp,lambda_threshold,connection_size_t)
+  fl_server.num_clusters = row_exp['num_clusters']
+  fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+  print('Initialized Clusters : '+ str(fl_server.num_clusters))
+
+  for round in range(row_exp['rounds']):
+    print('Communication Round ' + str(round+1))
+    # REFINE STEP
+    print('Doing Refine step')
+    refine_step = True
+    if round >2 :
+       refine_step = False
+    refine(fl_server,list_clients,row_exp,beta,lambda_threshold,connection_size_t,refine_step)
+
+  for client in list_clients :
+
+        acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    
+        setattr(client, 'accuracy', acc)
+
+  df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
+
+  return df_results 
+
+def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, lambda_threshold : float,connection_size_t : int,refine_step = False)-> None:
+  """
+    Refine the model aggregation and cluster assignments for clients by performing 
+    trimmed mean aggregation and optionally reclustering and merging.
+
+    Arguments:
+        fl_server (Server): The federated learning server containing the global and cluster models.
+        list_clients (list): A list of client objects involved in federated learning.
+        row_exp (dict): A dictionary containing experiment parameters, including the number of clusters and federated rounds.
+        beta (float): The fraction of extreme values to trim during the aggregation process.
+        lambda_threshold (float): The threshold for cluster distance to determine if clusters should merge.
+        connection_size_t (int): The minimum size of connected components to consider during merging.
+        refine_step (bool, optional): Whether to perform reclustering and merging after aggregation. Default is False.
+
+    Returns:
+        None: This function modifies the server model and client assignments in place.
+    """
+  
+  #STEP 1) Trimmed Mean on each cluster 
+  print('trimmed Mean Step')
+  for cluster_id in range(row_exp['num_clusters']) :
+    cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
+    trimmed_mean = trimmed_mean_beta_aggregation(cluster_clients_list,row_exp,beta)
+    fl_server.clusters_models[cluster_id] = update_server_model(fl_server.clusters_models[cluster_id],trimmed_mean)
+  if refine_step == True :
+    #STEP 2) Recluster
+    print('Recluster')
+    recluster(fl_server,list_clients,row_exp)
+
+    #STEP 3) Merge
+    print('Merge')
+    fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
+
+def recluster(fl_server: Server, list_clients : list, row_exp : dict)-> None : 
+  """
+    Reassign clients to clusters based on their distance to cluster models.
+
+    Arguments:
+        fl_server (Server): The federated learning server containing cluster models.
+        list_clients (list): A list of client objects involved in federated learning.
+        row_exp (dict): A dictionary containing experiment parameters such as the number of clusters.
+
+    Returns:
+        None: This function modifies the client cluster assignments in place.
+    """
+  
+  for client in list_clients:
+    client_dist_to_clusters = []
+    for cluster_id in range(row_exp['num_clusters']):
+      client_dist_to_clusters.append(cross_cluster_distance_client_to_cluster(fl_server,list_clients,cluster_id,client))
+    client.cluster_id = np.argmin(client_dist_to_clusters)  
+
+def merge(fl_server: Server,list_clients : list, 
+          lambda_threshold: float, connection_size_t: int) -> int :
+  """
+  Creates a graph from a similarity matrix with edges based on a threshold.
+
+  Args:
+    list_clients : list of clients present in the federated learning setup
+    similarity_matrix: A numpy array representing the similarity matrix of clients models
+    lambda_threshold: The threshold for edge inclusion.
+    connection_size_t: The minimum size of connected components to include.
+  Returns: 
+    Number of initial cluster
+    """
+  
+  num_clusters = fl_server.num_clusters
+  similarity_matrix = np.zeros((num_clusters, num_clusters))
+
+  G = nx.Graph()
+  # Add nodes to the graph
+  for cluster_id in range(num_clusters):
+    G.add_node(cluster_id)  
+    for cluster_id2 in range(cluster_id + 1, num_clusters):  # Avoid double counting
+        # Compute the similarity (or distance) between cluster_id and cluster_id2
+        similarity = cross_cluster_distance_cluster_to_cluster(fl_server, list_clients, cluster_id, cluster_id2)
+        # Fill in the symmetric matrix (i, j) and (j, i)
+        similarity_matrix[cluster_id, cluster_id2] = similarity
+        similarity_matrix[cluster_id2, cluster_id] = similarity
+# Add edges based on the threshold
+  for i in range(num_clusters):
+    for j in range(i + 1, num_clusters):  # Avoid duplicate edges
+      if similarity_matrix[i, j] <= lambda_threshold:
+        G.add_edge(i, j)
+
+  # Find connected components
+  clusters_list = [c for c in nx.connected_components(G) if len(c) >= connection_size_t]
+  if len(clusters_list) > 0 :
+    # Set the client cluster id to its corresponding cluster
+    for cluster_id in range(len(clusters_list)):
+      for client_id in clusters_list[cluster_id]:
+          list_clients[client_id].cluster_id = cluster_id
+    num_clusters = len(clusters_list)
+
+  return num_clusters
+
+def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_threshold: float, connection_size_t: int) -> int :
+  """
+  Creates a graph from a similarity matrix with edges based on a threshold.
+
+  Args:
+    list_clients : list of clients present in the federated learning setup
+    similarity_matrix: A numpy array representing the similarity matrix of clients models
+    lambda_threshold: The threshold for edge inclusion.
+    connection_size_t: The minimum size of connected components to include.
+  Returns: 
+    Number of initial cluster
+    """
+  from src.utils_fed import send_clusters_models_to_clients
+  from src.utils_training import train_central
+  send_clusters_models_to_clients(list_clients,fl_server)
+
+  # First Training
+  for client in list_clients : 
+    client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+    client.round_acc.append(acc)
+  
+  # Distance Matrix for ONE-SHOT Step
+  similarity_matrix = compute_distance_matrix(list_clients)
+  print(similarity_matrix)
+  print('Doing One Shot Clustering Initialization')
+  num_clients = len(list_clients)
+  G = nx.Graph()
+
+  # Add nodes to the graph
+  for i in range(num_clients):
+    G.add_node(i)
+
+  # Add edges based on the threshold
+  for i in range(num_clients):
+    for j in range(i + 1, num_clients):  # Avoid duplicate edges
+      if similarity_matrix[i, j] <= lambda_threshold:
+        G.add_edge(i, j)
+
+  # Find connected components
+  clusters_list = [c for c in nx.connected_components(G) if len(c) >= connection_size_t]
+  
+  # Set the client cluster id to its corresponding cluster
+  for cluster_id in range(len(clusters_list)):
+    for client_id in clusters_list[cluster_id]:
+        list_clients[client_id].cluster_id = cluster_id
+  return len(clusters_list)
+
+def trimmed_mean_beta_aggregation(list_clients,row_exp, beta)-> dict:
+    """
+    Compute the average parameter updates across multiple clients after trimming outliers 
+    using the Trimmed Mean Beta (TMB) method.
+    
+    Arguments:
+        list_clients : List of client instances with parameter updates
+        beta : Fraction of extreme values to trim (e.g., 0.1 for 10%)
+    
+    Returns:
+        avg_update : Dictionary of averaged parameter updates after trimming
+    """
+    from src.utils_training import train_central
+    # Initialize a dictionary to accumulate the updates for each parameter
+    avg_update = {}
+
+    # Iterate over the list of clients
+    for client in list_clients:
+      client.model, _, acc , client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+      client.round_acc.append(acc)
+      # Iterate over each parameter update in the client's update
+      for name, update_tensor in client.update.items():
+          if name in avg_update:
+              # Accumulate the updates
+              avg_update[name].append(update_tensor)
+          else:
+              # Initialize the accumulator for this parameter
+              avg_update[name] = [update_tensor]
+
+    # Now, apply trimming and calculate the average for each parameter update
+    num_clients = len(list_clients)
+    trim_size = int(beta * num_clients)
+
+    for name in avg_update:
+        # Stack the updates into a tensor
+        param_updates = torch.stack(avg_update[name])
+        
+        # Sort the updates along the batch dimension
+        sorted_updates, _ = torch.sort(param_updates, dim=0)
+
+        # Trim the top and bottom 'trim_size' updates
+        trimmed_updates = sorted_updates[trim_size:num_clients - trim_size]
+
+        # Compute the mean of the remaining updates
+        avg_update[name] = torch.mean(trimmed_updates, dim=0)
+
+    return avg_update
+
+def update_server_model(model, update)-> nn.Module:
+    """
+    Apply the weight update to the model parameters.
+
+    Arguments:
+        model : The model to update (client model or server model)
+        update : The dictionary containing parameter updates (client.update)
+
+    Returns:
+        The model with updated parameters.
+    """
+    # Iterate over the update dictionary (client.update)
+    with torch.no_grad():  # We don't want to track gradients during this operation
+        for name, update_tensor in update.items():
+            # Ensure that the update key corresponds to the model's parameter
+            if name in model.state_dict():
+                # Subtract the update from the model's current parameters
+                model.state_dict()[name].sub_(update_tensor)
+
+    return model

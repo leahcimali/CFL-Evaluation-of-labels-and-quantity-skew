@@ -2,33 +2,31 @@ Framework Parameters
 
 This document describes the parameters used in the federated learning framework. Each parameter is explained below, along with its possible values and purpose.
 Parameters
-exp_type
+exp_type, params
 
-    Description: Specifies the type of experiment to run.
+    Description: Specifies the type of experiment to run. if wrong value for params use default. 
 
     Possible Values:
 
-        global-federated: Benchmark experiment for global federated learning.
+        federated, None : Benchmark experiment for global federated learning. 
+        
+        fedprox, mu : Federated learning with FedProx optimization. Mu parameter for FedProx default is 0.01
 
-        pers-centralized: Benchmark experiment for personalized centralized learning.
+        oracle-centralized, None : Benchmark experiment for personalized centralized learning.
+        
+        oracle-cfl,None : Personalized federated learning. 
 
-        fedprox: Federated learning with FedProx optimization.
+        cfl, None : CFL. Use Kmeans on models weight for clustering
+        
+        ifca, None: Iterative Federated Clustering Algorithm.
 
-        pers-federated: Personalized federated learning.
+        hcfl, <metric>: Server-side clustered federated learning using agglomerative clustering with a specified model <metric> (possible Values : euclidean, cosine, MADC, EDC). Default use cosine.
 
-        hybrid: Hybrid clustered federated learning.
+        fedgroup, <metric>: FedGroup Algorithm 
 
-        client: Client-side clustered federated learning.
-
-        server-nonponderated: Server-side non-ponderated clustered federated learning.
-
-        server: Server-side clustered federated learning using KMeans clustering.
-
-        server-agglomerative-<metric>: Server-side clustered federated learning using agglomerative clustering with a specified metric (e.g., euclidean, cosine, MADC,EDC).
-
-        iterative-server-agglomerative-<metric>: Iterative server-side clustered federated learning. Corresponding to FedGroup.  
-
-        srfca: Experiment using the SRFCA algorithm.
+        srfca, (lambda, beta): Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm. 
+        
+        cornsflqs, <metric> : cornsflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
 
 dataset
 

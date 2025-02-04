@@ -8,6 +8,7 @@ import click
 
 @click.command()
 @click.option('--exp_type', help="The experiment type to run")
+@click.option('--params', help="Hyperparmaeters specific to exp type, if in bad format or void, will use defaults")
 @click.option('--dataset')
 @click.option('--nn_model', help= "The training model to use ('linear (default) or 'convolutional')")
 @click.option('--heterogeneity_type', help="The data heterogeneity to test (or dataset)")
@@ -20,14 +21,14 @@ import click
 @click.option('--seed', type=int)
 
 
-def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clients, num_samples_by_label, num_clusters, epochs, rounds, seed):
+def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, num_clients, num_samples_by_label, num_clusters, epochs, rounds, seed):
 
     from pathlib import Path
     import pandas as pd
 
     from src.utils_data import setup_experiment, get_uid 
 
-    row_exp = pd.Series({"exp_type": exp_type, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
+    row_exp = pd.Series({"exp_type": exp_type, "params": params, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
                "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "epochs": epochs,
                "rounds": rounds, "seed": seed})
     
@@ -64,62 +65,62 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clien
 
 def launch_experiment(fl_server, list_clients, row_exp, output_name, save_results = True):
         
-        from src.utils_training import run_cfl_client_side, run_cfl_server_side, run_cfl_hybrid
-        from src.utils_training import run_benchmark
-        from src.sr_fca import srfca
-
+        from src.utils_training import (run_cfl_IFCA, run_cfl_server_side, 
+                                        run_cfl_cornsflqs, FedGroup,run_benchmark, srfca)
+        
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
-        if row_exp['exp_type'] == "global-federated" or row_exp['exp_type'] == "pers-centralized" or row_exp['exp_type'] == "fedprox" or row_exp['exp_type'].split('-')[0] == "fedprox":
+        if row_exp['exp_type'] == "federated" or row_exp['exp_type'] == "oracle-centralized" or row_exp['exp_type'] == "fedprox":
 
             print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 
             df_results = run_benchmark(fl_server, list_clients, row_exp)
+        
         elif row_exp['exp_type'] =='srfca': 
             df_results = srfca(fl_server,list_clients,row_exp)
-        elif row_exp['exp_type'] == "pers-federated":
-            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='cheat',clustering_metric='none')
-        elif row_exp['exp_type'] == "hybrid":
-            print(f"Launching hybrid CFL experiment with parameters:\n {str_row_exp}")
+        
+        elif row_exp['exp_type'] == "oracle-cfl":
+            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='oracle-CFL',clustering_metric='none')
+        
+        elif row_exp['exp_type'] == "cornsflqs":
+            print(f"Launching cornsflqs CFL experiment with parameters:\n {str_row_exp}")
             # Need to add other than KMeans
-            df_results = run_cfl_hybrid(fl_server,list_clients,row_exp)
-        elif row_exp['exp_type'] == "client":
+            df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp)
+        
+        elif row_exp['exp_type'] == "IFCA":
             
             print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
 
-            df_results = run_cfl_client_side(fl_server, list_clients, row_exp)
-        elif row_exp['exp_type'] == "server-nonponderated":
-            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,ponderated=False)
-            
-        elif row_exp['exp_type'].split('-')[0] == "server":
+            df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
+        
+        elif row_exp['exp_type'] == "CFL":
 
             print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
-            # exp_type values should be server for Kmeans or 
-            # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
-            if len(row_exp['exp_type'].split('-')) == 1 :
-                print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(fl_server, list_clients, row_exp)
-            else : 
-                print('Using Agglomerative Clustering!')
-                algorithm = row_exp['exp_type'].split('-')[1]
-                clustering_metric = row_exp['exp_type'].split('-')[2]
-                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm,clustering_metric)
-        elif row_exp['exp_type'].split('-')[0] == "iterative":
+            
+            print('Using Kmeans Clustering!')
+            df_results = run_cfl_server_side(fl_server, list_clients, row_exp)
+        
+        elif row_exp['exp_type'] == 'HCFL': 
+            print('Using Agglomerative Clustering!')
+            algorithm = 'agglomerative'
+            clustering_metric = row_exp['params'] # params should be a string with clustering metric
+            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm,clustering_metric)
+        
+        elif row_exp['exp_type'] == "FedGroup":
             #iterative server-side
-            print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
-            # exp_type values should be server for Kmeans or 
-            # server-agglomerative-euclidean, server-agglomerative-cosine,  server-agglomerative-MADC  
-            if len(row_exp['exp_type'].split('-')) == 2 :
-                print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,iterative=True)
-            elif row_exp['exp_type'].split('-')[2] == 'EDC'  :
-                print('Using Kmeans Clustering!')
-                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,clustering_metric = 'EDC',iterative=True)
-            else : 
-                print('Using Agglomerative Clustering!')
-                algorithm = row_exp['exp_type'].split('-')[2]
-                clustering_metric = row_exp['exp_type'].split('-')[3]
-                df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm,clustering_metric,iterative=True)         
+            print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+            
+            if row_exp['params'] == 'MADC':
+                print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+            
+                df_results = FedGroup(fl_server, list_clients, row_exp,algorithm= 'agglomerative', clustering_metric = 'MADC' ,iterative=True)
+            else :
+                
+                row_exp['params'] = 'EDC'
+                str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
+                print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+
+                df_results = FedGroup(fl_server, list_clients, row_exp,algorithm= 'kmeans', clustering_metric = 'EDC' ,iterative=True)
         else:
             
             str_exp_type = row_exp['exp_type']
@@ -131,7 +132,6 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             df_results.to_csv("results/" + output_name + ".csv")
 
         return
-
 
 if __name__ == "__main__":
     main_driver()

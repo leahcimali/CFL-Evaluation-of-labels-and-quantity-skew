@@ -52,7 +52,7 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
   print('Initialized Clusters : '+ str(fl_server.num_clusters))
 
-  for round in range(row_exp['federated_rounds']):
+  for round in range(row_exp['rounds']):
     print('Communication Round ' + str(round+1))
     # REFINE STEP
     print('Doing Refine step')

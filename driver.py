@@ -15,12 +15,12 @@ import click
 @click.option('--num_clients', type=int)
 @click.option('--num_samples_by_label', type=int)
 @click.option('--num_clusters', type=int)
-@click.option('--centralized_epochs', type=int)
-@click.option('--federated_rounds', type=int)
+@click.option('--epochs', type=int)
+@click.option('--rounds', type=int)
 @click.option('--seed', type=int)
 
 
-def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clients, num_samples_by_label, num_clusters, centralized_epochs, federated_rounds, seed):
+def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clients, num_samples_by_label, num_clusters, epochs, rounds, seed):
 
     from pathlib import Path
     import pandas as pd
@@ -28,8 +28,8 @@ def main_driver(exp_type, dataset, nn_model, heterogeneity_type, skew, num_clien
     from src.utils_data import setup_experiment, get_uid 
 
     row_exp = pd.Series({"exp_type": exp_type, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
-               "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "centralized_epochs": centralized_epochs,
-               "federated_rounds": federated_rounds, "seed": seed})
+               "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "epochs": epochs,
+               "rounds": rounds, "seed": seed})
     
 
     output_name =  row_exp.to_string(header=False, index=False, name=False).replace(' ', "").replace('\n','_')

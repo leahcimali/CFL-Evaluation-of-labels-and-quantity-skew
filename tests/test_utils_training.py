@@ -21,8 +21,8 @@ def utils_extract_params(file_path: Path):
     with open (file_path, "r") as fp:
         
         keys = ['exp_type', 'dataset', 'nn_model', 'heterogeneity_type' , 'num_clients',
-                'num_samples_by_label' , 'num_clusters', 'centralized_epochs',
-                'federated_rounds', 'seed']
+                'num_samples_by_label' , 'num_clusters', 'epochs',
+                'rounds', 'seed']
         
 
         parameters = file_path.stem.split('_')

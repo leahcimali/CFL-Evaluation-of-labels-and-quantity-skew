@@ -19,7 +19,7 @@ with open(args.csv_file, newline='') as csvfile:
     # Iterate over each row (experiment configuration) in the CSV file
     for row in reader:
         # Assigning CSV values to variables
-        exp_type, dataset, nn_model, heterogeneity_type,skew, num_clients, num_samples_by_label, num_clusters, centralized_epochs, federated_rounds, seed = row
+        exp_type, dataset, nn_model, heterogeneity_type,skew, num_clients, num_samples_by_label, num_clusters, epochs, rounds, seed = row
 
         # Building the command to run the driver.py script with the corresponding arguments
         command = [
@@ -32,8 +32,8 @@ with open(args.csv_file, newline='') as csvfile:
             "--num_clients", num_clients,
             "--num_samples_by_label", num_samples_by_label,
             "--num_clusters", num_clusters,
-            "--centralized_epochs", centralized_epochs,
-            "--federated_rounds", federated_rounds,
+            "--epochs", epochs,
+            "--rounds", rounds,
             "--seed", seed]
 
         # Print the command to check it before running (optional)

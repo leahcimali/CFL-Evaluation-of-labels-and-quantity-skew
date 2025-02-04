@@ -237,8 +237,8 @@ def summarize_results() -> None:
             list_params = path.stem.split('_')      
 
             dict_exp_results = {"exp_type" : list_params[0], "dataset": list_params[1], "nn_model" : list_params[2], "heterogeneity_class": list_params[3],"skew":list_params[4], "number_of_clients": list_params[5],
-                                    "samples by_client": list_params[6], "num_clusters": list_params[7], "centralized_epochs": list_params[8],
-                                    "federated_rounds": list_params[9],"accuracy": accuracy}
+                                    "samples by_client": list_params[6], "num_clusters": list_params[7], "epochs": list_params[8],
+                                    "rounds": list_params[9],"accuracy": accuracy}
 
             try:
                 

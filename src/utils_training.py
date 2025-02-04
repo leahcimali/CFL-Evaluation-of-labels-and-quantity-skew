@@ -64,7 +64,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     ColdStart(fl_server,list_clients,row_exp,algorithm,clustering_metric)
     
     round_counter = 0
-    while round_counter < row_exp['federated_rounds'] or len([client for client in list_clients if client.cluster_id is None]) > 0:
+    while round_counter < row_exp['rounds'] or len([client for client in list_clients if client.cluster_id is None]) > 0:
         selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
         send_clusters_models_to_clients(selected_clients, fl_server)
         
@@ -78,7 +78,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         fedavg(fl_server, selected_clients,ponderated=ponderated)
 
         # Update round counter only if within federated rounds
-        if round_counter < row_exp['federated_rounds']:
+        if round_counter < row_exp['rounds']:
             round_counter += 1
     return
     
@@ -110,7 +110,7 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
         FedGroup(fl_server,list_clients,row_exp,algorithm,clustering_metric,ponderated)      
     else:
         cold_start = row_exp
-        cold_start['federated_rounds'] = 2 
+        cold_start['rounds'] = 2 
         fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=ponderated)
         fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
         setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
@@ -160,7 +160,7 @@ def run_cfl_client_side(fl_server : Server, list_clients : list, row_exp : dict,
 
     torch.manual_seed(row_exp['seed'])
     
-    for _ in range(row_exp['federated_rounds']):
+    for _ in range(row_exp['rounds']):
 
         for client in list_clients:
 
@@ -206,7 +206,7 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
     
     
     cold_start = row_exp
-    cold_start['federated_rounds'] = 1
+    cold_start['rounds'] = 1
     fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False,ponderated=False)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
@@ -214,7 +214,7 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
         client.model, _ , acc, client.update = train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
     
-    for round in range(row_exp['federated_rounds']):
+    for round in range(row_exp['rounds']):
         if algorithm == 'agglomerative' :
             Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
             
@@ -226,10 +226,10 @@ def run_cfl_hybrid(fl_server : Server, list_clients : list, row_exp : dict, algo
             client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
-    for round in range(row_exp['federated_rounds']):
+    for round in range(row_exp['rounds']):
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
-        if round != row_exp['federated_rounds']//2 -1 :
+        if round != row_exp['rounds']//2 -1 :
             for client in list_clients:
                 client.model, _ , acc, client.update= train_central(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
                 client.round_acc.append(acc)
@@ -328,7 +328,7 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
         mu =fedprox
     else : 
         mu =0
-    for i in range(0, row_exp['federated_rounds']):
+    for i in range(0, row_exp['rounds']):
 
         accs = []
 
@@ -399,7 +399,7 @@ def train_central(model: ImageClassificationBase, train_loader: DataLoader, val_
     # Initialize variable to accumulate gradients
     avg_grad = [torch.zeros_like(param) for param in model.parameters()]
 
-    for epoch in range(row_exp['centralized_epochs']):
+    for epoch in range(row_exp['epochs']):
         model.train()
         train_losses = []
         num_batches = 0

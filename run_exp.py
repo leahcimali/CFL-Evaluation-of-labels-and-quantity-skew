@@ -25,6 +25,7 @@ with open(args.csv_file, newline='') as csvfile:
         command = [
             "python", "driver.py",
             "--exp_type", exp_type,
+            "--params", params,
             "--dataset", dataset,
             "--nn_model", nn_model,
             "--heterogeneity_type", heterogeneity_type,

@@ -365,7 +365,7 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
     list_clients = add_clients_heterogeneity(list_clients, row_exp)
     
-    if row_exp['exp_type'] == "client":
+    if row_exp['exp_type'] == "ifca":
 
         init_server_cluster(fl_server, list_clients, row_exp, imgs_params[row_exp['dataset']])
 

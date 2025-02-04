@@ -34,10 +34,10 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     for client in selected_clients :
         client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
-        if algorithm != 'kmeans' :
+        if clustering_metric == 'madc' :
             Agglomerative_Clustering(fl_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
         else: 
-            k_means_clustering(fl_server,selected_clients, row_exp['num_clusters'], row_exp['seed'],metric= clustering_metric)
+            k_means_clustering(fl_server,selected_clients, row_exp['num_clusters'], row_exp['seed'], metric= clustering_metric)
     fedavg(fl_server, selected_clients,ponderated= ponderated)
     return
 
@@ -93,7 +93,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     return df_results 
 
     
-def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',iterative = False,ponderated = True) -> pd.DataFrame:
+def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict, ponderated = True) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -103,8 +103,6 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
         fl_server : Main server model    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
-        algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
-        clustering_metric : euclidean, cosine or MADC
 
     Returns:
 
@@ -117,11 +115,11 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
 
     torch.manual_seed(row_exp['seed'])
     
-    fl_server = train_federated(fl_server, list_clients, row_exp['rounds']//2, use_clusters_models = False, ponderated=ponderated)
+    fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=ponderated)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
         
-    if algorithm == 'oracle-CFL':
+    if row_exp['exp_type'] == 'oracle-cfl':
         # Use Personalized for Clustered Federated Learning with knowledge of client heterogeneity class
         # Used as a benchmark for CFL.
         print('Using personalized Federated Learning!')
@@ -130,10 +128,10 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
         for client in list_clients:
             client.cluster_id = cluster_mapping[client.heterogeneity_class]        
 
-    elif algorithm == 'agglomerative' :
-        Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+    elif row_exp['exp_type'] == 'hcfl' :
+        Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['params'], row_exp['seed'])
     
-    elif algorithm == 'kmeans': 
+    elif row_exp['exp_type'] == 'cfl': 
         k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
 
     fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = True)
@@ -148,7 +146,7 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
     return df_results 
 
 
-def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict,ponderated : bool = True) -> pd.DataFrame:
+def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponderated : bool = True) -> pd.DataFrame:
 
     """ Driver function for client-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights (k-means).
@@ -165,11 +163,10 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict,pondera
     import torch
 
     torch.manual_seed(row_exp['seed'])
-    
+
     for _ in range(row_exp['rounds']):
 
         for client in list_clients:
-
             client.model, _, acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -332,7 +329,7 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
     
     from src.utils_fed import send_server_model_to_client, send_clusters_models_to_clients, fedavg
     
-    for i in range(0, row_exp['rounds']):
+    for i in range(int(row_exp['rounds'])):
 
         accs = []
 

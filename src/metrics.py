@@ -1,5 +1,6 @@
-from src.fedclass import Client
 import numpy as np
+from fedclass import Client
+
 def calc_global_metrics(labels_true: list, labels_pred: list) -> dict:
 
     """ Calculate global metrics based on model weights

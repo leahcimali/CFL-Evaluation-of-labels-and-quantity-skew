@@ -84,7 +84,10 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         elif row_exp['exp_type'] == "cornsflqs":
             print(f"Launching cornsflqs CFL experiment with parameters:\n {str_row_exp}")
             # Need to add other than KMeans
-            df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric=row_exp['params'])
+            if row_exp['params']== 'edc':
+                df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric=row_exp['params'])
+            else : 
+                df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric=row_exp['params'])
         
         elif row_exp['exp_type'] == "ifca":
             

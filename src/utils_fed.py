@@ -312,7 +312,7 @@ def EDC(weight_matrix : pd.DataFrame, num_clusters : int, seed : int) ->  np.nda
     
     return decomposed_cossim_matrix
 
-def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete') -> None:
+def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete',model_update = False) -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
@@ -325,7 +325,7 @@ def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_cluster
     """ 
     from sklearn.cluster import AgglomerativeClustering
 
-    weight_matrix = model_weight_matrix(fl_server,list_clients)
+    weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=model_update)
     if clustering_metric == 'MADC': 
         weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=True)
         affinity_matrix = MADC(weight_matrix)

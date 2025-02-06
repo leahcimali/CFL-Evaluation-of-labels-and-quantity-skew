@@ -17,7 +17,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     
     Arguments:
 
-        main_model : Type of Server model needed    
+        fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
         algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
@@ -47,7 +47,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     
     Arguments:
 
-        main_model : Type of Server model needed    
+        fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
         algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
@@ -154,7 +154,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
 
     Arguments:
 
-        main_model : Type of Server model needed    
+        fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
     """
@@ -183,7 +183,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     
     return df_results
 
-def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = False) -> pd.DataFrame:
+def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -207,11 +207,12 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
 
     torch.manual_seed(row_exp['seed'])
     
-    
+    # Double Cold start
     cold_start = row_exp
     cold_start['rounds'] = 1
-    fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False,ponderated=False)
-    fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
+    fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=True)
+    fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
+    
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
         client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
@@ -219,8 +220,8 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
     
     for round in range(row_exp['rounds']):
         if algorithm == 'agglomerative' :
-            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
-            
+            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=True)
+
         elif algorithm == 'kmeans': 
             k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
         fedavg(fl_server, list_clients)
@@ -252,7 +253,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
 
     Arguments:
 
-        main_model : Type of Server model needed    
+        fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
     """
@@ -314,13 +315,13 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     return df_results
 
 
-def train_federated(main_model, list_clients, row_exp, use_clusters_models = False, ponderated = True, fedprox_mu : float = 0):
+def train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated = True, fedprox_mu : float = 0):
     
     """Controler function to launch federated learning
 
     Arguments:
 
-        main_model: Server model used in our experiment
+        fl_server: Server model used in our experiment
         list_clients: A list of Client Objects used as nodes in the FL protocol  
         row_exp: The current experiment's global parameters
         use_clusters_models: Boolean to determine whether to use personalization by clustering
@@ -335,20 +336,20 @@ def train_federated(main_model, list_clients, row_exp, use_clusters_models = Fal
 
         if use_clusters_models == False:
         
-            send_server_model_to_client(list_clients, main_model)
+            send_server_model_to_client(list_clients, fl_server)
 
         else:
 
-            send_clusters_models_to_clients(list_clients, main_model)
+            send_clusters_models_to_clients(list_clients, fl_server)
 
         for client in list_clients:
             print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
             client.model, curr_acc, val_acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, fedprox_mu)
             client.round_acc.append(val_acc)
             accs.append(curr_acc)
-            fedavg(main_model, list_clients,ponderated)
+            fedavg(fl_server, list_clients,ponderated)
 
-    return main_model
+    return fl_server
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

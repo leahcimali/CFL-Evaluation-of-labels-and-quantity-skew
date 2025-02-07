@@ -226,7 +226,7 @@ def client_migration(fl_server,client):
     client.model = fl_server.clusters_models[min_cluster_id]
     client.cluster_id = min_cluster_id
         
-def k_means_clustering(fl_server : Server, list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean') -> None:
+def k_means_clustering(fl_server : Server, list_clients : list, num_clusters : int, seed : int, metric : str ='euclidean',model_update = True) -> None:
     """ Performs a k-mean clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
@@ -237,8 +237,8 @@ def k_means_clustering(fl_server : Server, list_clients : list, num_clusters : i
     """ 
     from sklearn.cluster import KMeans
     weight_matrix = model_weight_matrix(fl_server,list_clients)
-    if metric == 'EDC': 
-        weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=True)
+    if metric == 'edc': 
+        weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=model_update)
         weight_matrix = EDC(weight_matrix, num_clusters, seed)
     kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
     kmeans.fit(weight_matrix)
@@ -312,7 +312,7 @@ def EDC(weight_matrix : pd.DataFrame, num_clusters : int, seed : int) ->  np.nda
     
     return decomposed_cossim_matrix
 
-def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='complete',model_update = False) -> None:
+def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_clusters : int, clustering_metric :str, seed : int, linkage_type : str='single',model_update = False) -> None:
     """ Performs a agglomerative clustering and sets the cluser_id attribute to clients based on the result
     
     Arguments:
@@ -331,7 +331,10 @@ def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_cluster
         affinity_matrix = MADC(weight_matrix)
         ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)
         weight_matrix = affinity_matrix
-    else: 
+    elif clustering_metric == 'euclidean':
+        
+        ac = AgglomerativeClustering(n_clusters=num_clusters, metric=clustering_metric, linkage='ward')
+    else:  
         ac = AgglomerativeClustering(n_clusters=num_clusters, metric=clustering_metric, linkage=linkage_type)
     
     ac.fit(weight_matrix)

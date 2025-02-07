@@ -207,10 +207,11 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
 
     torch.manual_seed(row_exp['seed'])
     
-    # Double Cold start
+    # Cold start
     cold_start = row_exp
-    cold_start['rounds'] = 1
-    fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=True)
+    #cold_start['rounds'] = 1
+    # Train the federated model with unponderated fedavg for n rounds
+    fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=False)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
@@ -219,11 +220,15 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
         client.round_acc.append(acc)
     
     for round in range(row_exp['rounds']):
+        if round == 0 :
+            model_update = True
+        else :
+            model_update = False
         if algorithm == 'agglomerative' :
-            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=True)
+            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=model_update)
 
         elif algorithm == 'kmeans': 
-            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'])
+            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],model_update)
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:

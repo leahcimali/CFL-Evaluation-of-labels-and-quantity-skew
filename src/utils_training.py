@@ -35,7 +35,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
         client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
         if clustering_metric == 'madc' :
-            Agglomerative_Clustering(fl_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'])
+            Agglomerative_Clustering(fl_server,selected_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],linkage_type='complete')
         else: 
             k_means_clustering(fl_server,selected_clients, row_exp['num_clusters'], row_exp['seed'], metric= clustering_metric)
     fedavg(fl_server, selected_clients,ponderated= ponderated)

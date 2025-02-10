@@ -192,7 +192,7 @@ def model_similarity_matrix(fl_server : Server, list_clients : list, metric: str
         similarity_df = pd.DataFrame(similarity_matrix, index=df.index, columns=df.index)
 
         return similarity_df
-
+    '''
     elif metric == 'distcross_cluster':
         # Cross-cluster distance: (1/2) * (f_i(w_j) + f_j(w_i))
         # Here, f_i(w_j) is the dissimilarity between server_model and client.model
@@ -200,10 +200,10 @@ def model_similarity_matrix(fl_server : Server, list_clients : list, metric: str
         f_i_w_j = model_similarity(client, server_model, 'cosine_dissimilarity')
         f_j_w_i = model_similarity(client, server_model, 'cosine_dissimilarity')
         return (f_i_w_j + f_j_w_i) / 2
-
     else:
-        raise ValueError(f"Unknown metric: {metric}. Supported metrics are: 'cosine_similarity', 'cosine_dissimilarity', 'euclidean', 'MADC', 'distcross_cluster'.")
-    
+        raise ValueError(f"Unknown metric: {metric}. Supported metrics are: 'cosine_similarity', 'cosine_dissimilarity', 'euclidean', 'madc', 'distcross_cluster'.")
+        '''
+
 def model_similarity(client : list, server_model : list) :
     from sklearn.metrics.pairwise import cosine_similarity
     server_weights = torch.cat([param.detach().flatten() for param in server_model.parameters()]).unsqueeze(0).cpu()
@@ -326,7 +326,7 @@ def Agglomerative_Clustering(fl_server: Server, list_clients : list, num_cluster
     from sklearn.cluster import AgglomerativeClustering
 
     weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=model_update)
-    if clustering_metric == 'MADC': 
+    if clustering_metric == 'madc': 
         weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=True)
         affinity_matrix = MADC(weight_matrix)
         ac = AgglomerativeClustering(num_clusters, metric='precomputed', linkage=linkage_type)

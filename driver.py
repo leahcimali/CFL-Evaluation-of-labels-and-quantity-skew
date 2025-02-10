@@ -119,7 +119,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             if row_exp['params'] == 'madc':
                 print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
             
-                df_results = FedGroup(fl_server, list_clients, row_exp,algorithm= 'agglomerative', clustering_metric = 'MADC' ,iterative=True)
+                df_results = FedGroup(fl_server, list_clients, row_exp,algorithm= 'agglomerative', clustering_metric = 'madc' ,iterative=True)
             else :
                 
                 row_exp['params'] = 'edc'

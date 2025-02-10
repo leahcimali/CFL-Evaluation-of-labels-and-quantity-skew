@@ -1,20 +1,22 @@
-
 from pandas import DataFrame
 from pathlib import Path
 from torch import tensor
 
 
-def save_histograms() -> None:
+def save_histograms(base_path: str) -> None:
 
-    """Read csv files found in 'results/' and generates and saves histogram plots of clients assignemnts
+    """Read csv files found in the given base_path and generates and saves histogram plots of clients assignments
+
+    Arguments:
+        base_path : The base directory path where the csv files are located
 
     Raises : 
         Warning when the csv file is not of the expected format (code generated results csv)
     """
 
     import pandas as pd
-    
-    pathlist = Path("results/").rglob('*.csv') 
+
+    pathlist = Path(base_path).rglob('*.csv') 
     
     for file_path in pathlist:
 
@@ -24,11 +26,11 @@ def save_histograms() -> None:
 
                 df_results = pd.read_csv(file_path)
 
-                plot_histogram_clusters(df_results, file_path.stem)
+                plot_histogram_clusters(df_results, file_path.stem, base_path)
     
             except Exception as e:
         
-                print(f"Error: Unable to open result file {file_path}.",e)
+                print(f"Error: Unable to open result file {file_path}.", e)
             
                 continue
     return
@@ -98,13 +100,14 @@ def plot_img(img : tensor) -> None:
 
 
 
-def plot_histogram_clusters(df_results: DataFrame, title: str) -> None:
+def plot_histogram_clusters(df_results: DataFrame, title: str, base_path: str) -> None:
     """ Function to create 3D Histograms of clients to cluster assignments showing client's heterogeneity class
     with skew values represented as hue in a stacked bar format.
     
     Arguments:
         df_results : DataFrame containing all parameters from the resulting csv files
-        title : The plot title. The image is saved in results/plots/histogram_' + title + '.png'
+        title : The plot title. The image is saved in base_path/plots/histogram_' + title + '.png'
+        base_path : The base directory path where the plots will be saved
     """
     
     import matplotlib.pyplot as plt
@@ -184,7 +187,7 @@ def plot_histogram_clusters(df_results: DataFrame, title: str) -> None:
     legend_patches = [Patch(color=color_map[skew], label=skew) for skew in skew_values]
     plt.legend(handles=legend_patches, title="Skew", loc='upper right', bbox_to_anchor=(1.15, 1))
     
-    plt.savefig('results/plots/histogram_' + title + '.png')
+    plt.savefig(Path(base_path) / 'plots' / f'histogram_{title}.png')
     
     plt.close()
 
@@ -206,7 +209,7 @@ def normalize_results(results_accuracy : float, results_std : float) -> int:
     return results_accuracy, results_std
 
 
-def summarize_results() -> None:
+def summarize_results(base_path) -> None:
 
     """ Creates results summary of all the results files under "results/summarized_results.csv"""
         
@@ -215,10 +218,11 @@ def summarize_results() -> None:
     from numpy import mean, std
 
     from src.metrics import calc_global_metrics
+    import sys
 
 
-    pathlist = Path("results/").rglob('*.csv') 
-    
+
+    pathlist = Path(base_path).rglob('*.csv')
     list_results = []
 
     for path in pathlist:
@@ -269,8 +273,8 @@ def summarize_results() -> None:
             list_results.append(dict_exp_results)
             
     df_results = pd.DataFrame(list_results)
-    
     df_results.sort_values(['heterogeneity_class', 'dataset', 'exp_type', 'nn_model','number_of_clients'], inplace=True)
+
     try: 
         df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm"]]
     except KeyError as e: 
@@ -278,8 +282,9 @@ def summarize_results() -> None:
         for col in missing_cols:
             df_results[col] = "n/a"
         df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm"]]
+    df_results.sort_values(['dataset', 'skew','exp_type','accuracy'], inplace=True)
 
-    df_results.to_csv("results/summarized_results.csv", float_format='%.2f', index=False, na_rep="n/a")
+    df_results.to_csv(Path(base_path) / "summarized_results.csv", float_format='%.2f', index=False, na_rep="n/a")
 
     return
 
@@ -287,7 +292,11 @@ def summarize_results() -> None:
 
 
 if __name__ == "__main__":
-    
-    save_histograms()
+    import sys
+    if len(sys.argv) > 1:
+        base_path = sys.argv[1]
+    else:
+        base_path = "results/"
+    save_histograms(base_path)
 
-    summarize_results()
+    summarize_results(base_path)

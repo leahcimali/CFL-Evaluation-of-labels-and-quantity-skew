@@ -69,7 +69,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
-        if row_exp['exp_type'] == "federated" or row_exp['exp_type'] == "oracle-centralized" or row_exp['exp_type'] == "fedprox":
+        if row_exp['exp_type'] == "fedavg" or row_exp['exp_type'] == "oracle-centralized" or row_exp['exp_type'] == "fedprox":
 
             print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 

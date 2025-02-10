@@ -289,7 +289,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     
                 setattr(client, 'accuracy', global_acc)
     
-    elif row_exp['exp_type'] == 'federated':
+    elif row_exp['exp_type'] == "fedavg":
                 
         model_trained = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False)
 

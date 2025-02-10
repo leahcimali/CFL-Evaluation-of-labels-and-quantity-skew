@@ -183,7 +183,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     
     return df_results
 
-def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
+def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -228,7 +228,7 @@ def run_cfl_cornsflqs(fl_server : Server, list_clients : list, row_exp : dict, a
             Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=model_update)
 
         elif algorithm == 'kmeans': 
-            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],model_update)
+            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],clustering_metric,model_update)
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:

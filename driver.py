@@ -65,7 +65,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
 
 def launch_experiment(fl_server, list_clients, row_exp, output_name, save_results = True):
         
-        from src.utils_training import run_cfl_IFCA, run_cfl_server_side, run_cfl_cornsflqs, FedGroup,run_benchmark, srfca
+        from src.utils_training import run_cfl_IFCA, run_cfl_server_side, run_cfl_cornflqs, FedGroup,run_benchmark, srfca
         
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
@@ -81,15 +81,19 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         elif row_exp['exp_type'] == "oracle-cfl":
             df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='oracle-cfl',clustering_metric='none')
         
-        elif row_exp['exp_type'] == "cornsflqs":
-            print(f"Launching cornsflqs CFL experiment with parameters:\n {str_row_exp}")
+        elif row_exp['exp_type'] == "cornflqs":
+            print(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
             # Need to add other than KMeans
             if row_exp['params']== 'edc':
-                df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
-
+                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
             elif row_exp['params']== 'euclidean':
-                df_results = run_cfl_cornsflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
-            
+                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
+            elif row_exp['params']== 'madc':
+                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='madc')
+            elif row_exp['params']== 'kmeans':
+                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='euclidean')
+
+
         elif row_exp['exp_type'] == "ifca":
             
             print(f"Launching client-side experiment with parameters:\n {str_row_exp}")

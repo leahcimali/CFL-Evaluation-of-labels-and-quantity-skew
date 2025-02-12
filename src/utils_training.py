@@ -235,13 +235,13 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
-    for round in range(row_exp['rounds']):
-        fedavg(fl_server, list_clients)
-        set_client_cluster(fl_server, list_clients, row_exp)
-        if round != row_exp['rounds']//2 -1 :
-            for client in list_clients:
-                client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-                client.round_acc.append(acc)
+    for round in range(row_exp['rounds']//2):
+        fedavg(fl_server, list_clients) # Do fedavg by cluster
+        if round <= row_exp['rounds']//4 :
+            set_client_cluster(fl_server, list_clients, row_exp)
+        for client in list_clients:
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
+            client.round_acc.append(acc)
 
     for client in list_clients :
 
@@ -553,19 +553,13 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   similarity_matrix = compute_distance_matrix(list_clients)
   print(similarity_matrix)
   
-  try:
-    lambda_threshold, beta = ast.literal_eval(row_exp['params'])
-  except (ValueError, SyntaxError, TypeError):
-    # Flatten the matrix and remove diagonal elements
-    similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]
-
-    # Compute the first quartile (25th percentile)
-    lambda_threshold = np.percentile(similarity_values, 25)
-    beta = 0.1
-
+  # Flatten the matrix and remove diagonal elements
+  similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]  
+  lambda_threshold = np.percentile(similarity_values, 20) + 0.2
+  beta = 0.1
   connection_size_t = 2 
   print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
-   
+  
   row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
   fl_server.num_clusters = row_exp['num_clusters']
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  

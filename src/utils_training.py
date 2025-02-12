@@ -537,13 +537,36 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
     """
   import ast
   from src.utils_training import test_model
+  from src.utils_fed import send_clusters_models_to_clients
+  from src.utils_training import train_model
   #SRFCA hyperparameters
-  lambda_threshold, beta = ast.literal_eval(row_exp['params'])
+  
+  # ONE_SHOT STEP
+  send_clusters_models_to_clients(list_clients,fl_server)
+
+  # First Training
+  for client in list_clients : 
+    client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
+    client.round_acc.append(acc)
+  
+  # Distance Matrix for ONE-SHOT Step
+  similarity_matrix = compute_distance_matrix(list_clients)
+  print(similarity_matrix)
+  
+  try:
+    lambda_threshold, beta = ast.literal_eval(row_exp['params'])
+  except (ValueError, SyntaxError, TypeError):
+    # Flatten the matrix and remove diagonal elements
+    similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]
+
+    # Compute the first quartile (25th percentile)
+    lambda_threshold = np.percentile(similarity_values, 25)
+    beta = 0.1
+
   connection_size_t = 2 
   print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
-  # ONE_SHOT STEP
-
-  row_exp['num_clusters'] = one_shot(fl_server,list_clients,row_exp,lambda_threshold,connection_size_t)
+   
+  row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
   fl_server.num_clusters = row_exp['num_clusters']
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
   print('Initialized Clusters : '+ str(fl_server.num_clusters))
@@ -590,7 +613,9 @@ def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, 
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
     trimmed_mean = trimmed_mean_beta_aggregation(cluster_clients_list,row_exp,beta)
     fl_server.clusters_models[cluster_id] = update_server_model(fl_server.clusters_models[cluster_id],trimmed_mean)
+  
   if refine_step == True :
+
     #STEP 2) Recluster
     print('Recluster')
     recluster(fl_server,list_clients,row_exp)
@@ -662,7 +687,7 @@ def merge(fl_server: Server,list_clients : list,
 
   return num_clusters
 
-def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_threshold: float, connection_size_t: int) -> int :
+def one_shot(fl_server : Server,list_clients : list, lambda_threshold: float, connection_size_t: int,similarity_matrix : np.ndarray) -> int :
   """
   Creates a graph from a similarity matrix with edges based on a threshold.
 
@@ -674,18 +699,8 @@ def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_thre
   Returns: 
     Number of initial cluster
     """
-  from src.utils_fed import send_clusters_models_to_clients
-  from src.utils_training import train_model
-  send_clusters_models_to_clients(list_clients,fl_server)
 
-  # First Training
-  for client in list_clients : 
-    client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
-    client.round_acc.append(acc)
-  
-  # Distance Matrix for ONE-SHOT Step
-  similarity_matrix = compute_distance_matrix(list_clients)
-  print(similarity_matrix)
+
   print('Doing One Shot Clustering Initialization')
   num_clients = len(list_clients)
   G = nx.Graph()
@@ -702,7 +717,7 @@ def one_shot(fl_server : Server,list_clients : list, row_exp : dict, lambda_thre
 
   # Find connected components
   clusters_list = [c for c in nx.connected_components(G) if len(c) >= connection_size_t]
-  
+      
   # Set the client cluster id to its corresponding cluster
   for cluster_id in range(len(clusters_list)):
     for client_id in clusters_list[cluster_id]:

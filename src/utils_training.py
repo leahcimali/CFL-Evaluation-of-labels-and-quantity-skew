@@ -167,7 +167,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     for _ in range(row_exp['rounds']):
 
         for client in list_clients:
-            client.model, _, acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.model, _, acc, client.update = train_model(client.model.to(device), client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
         fedavg(fl_server, list_clients,ponderated)
@@ -395,9 +395,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
     import copy
 
     # Move the model to the device
-    server_model = copy.deepcopy(model)
-    if mu > 0:
-        server_model.to(device)
+    server_model = copy.deepcopy(model).to(device)
 
     # Optimizer setup
     history = []

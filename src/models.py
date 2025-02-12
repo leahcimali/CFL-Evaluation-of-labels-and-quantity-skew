@@ -6,10 +6,33 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def accuracy(outputs, labels):
+    """
+    Computes the accuracy of the predictions.
+
+    Args:
+        outputs (torch.Tensor): The output predictions from the model, typically of shape (batch_size, num_classes).
+        labels (torch.Tensor): The ground truth labels, typically of shape (batch_size).
+
+    Returns:
+        torch.Tensor: A single-element tensor containing the accuracy of the predictions as a float.
+    """
     _, preds = torch.max(outputs, dim=1)
     return torch.tensor(torch.sum(preds == labels).item() / len(preds))
 
 class ImageClassificationBase(nn.Module):
+    """
+    Base class for image classification models.
+    Methods
+    -------
+    training_step(batch, device):
+        Performs a training step by computing the loss for a batch of images and labels.
+    validation_step(batch, device):
+        Performs a validation step by computing the loss and accuracy for a batch of images and labels.
+    validation_epoch_end(outputs):
+        Computes the average loss and accuracy over all validation batches at the end of an epoch.
+    epoch_end(epoch, result):
+        Prints the training and validation loss and accuracy for the epoch.
+    """
     def training_step(self, batch, device):
         images, labels = batch
         images, labels = images.to(device), labels.to(device).long() 
@@ -48,54 +71,6 @@ class GenericLinearModel(ImageClassificationBase):
     def forward(self, xb):
         xb = xb.view(-1, self.in_size * self.in_size)
         return self.network(xb)
-'''
-class GenericConvModel(ImageClassificationBase):
-    def __init__(self, in_size, n_channels):
-        super().__init__()
-        self.img_final_size = int(in_size / (2**3))
-        self.network = nn.Sequential(
-            nn.Conv2d(n_channels, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # output: 64 x 16 x 16
-            nn.Dropout(0.25),
-            
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # output: 128 x 8 x 8
-            nn.Dropout(0.25),
-            
-            
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # output: 256 x 4 x 4
-            nn.Dropout(0.25),
-            
-            nn.Flatten(),
-            nn.Linear(256 * self.img_final_size * self.img_final_size, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Linear(512, 10)
-        )
-
-    def forward(self, xb):
-        x = self.network[:-3](xb)  # Pass through the Conv layers
-        self.img_final_size = x.shape[-1]  # Get dynamic size after Conv layers
-        x = self.network[-3:](x.view(x.size(0), -1))  # Flatten and pass through FC layers
-        return x
-'''
 
 # Credit : https://github.com/Moddy2024/ResNet-9/blob/main/resnet-9.ipynb    
 def conv_block(in_channels, out_channels, pool=False):

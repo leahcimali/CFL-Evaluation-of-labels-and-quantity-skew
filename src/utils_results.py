@@ -239,6 +239,8 @@ def summarize_results() -> None:
             dict_exp_results = {"exp_type" : list_params[0], "dataset": list_params[1], "nn_model" : list_params[2], "heterogeneity_class": list_params[3],"skew":list_params[4], "number_of_clients": list_params[5],
                                     "samples by_client": list_params[6], "num_clusters": list_params[7], "epochs": list_params[8],
                                     "rounds": list_params[9],"accuracy": accuracy}
+            
+            accuracy_by_class = df_exp_results.groupby(['heterogeneity_class', 'skew'])['accuracy'].agg(['mean', 'std']).reset_index()
 
             try:
                 
@@ -265,6 +267,8 @@ def summarize_results() -> None:
     
     df_results.to_csv("results/summarized_results.csv", float_format='%.2f', index=False, na_rep="n/a")
 
+    
+    
     return
 
 

@@ -605,8 +605,7 @@ def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, 
   print('trimmed Mean Step')
   for cluster_id in range(row_exp['num_clusters']) :
     cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
-    trimmed_mean = trimmed_mean_beta_aggregation(cluster_clients_list,row_exp,beta)
-    fl_server.clusters_models[cluster_id] = update_server_model(fl_server.clusters_models[cluster_id],trimmed_mean)
+    fl_server.clusters_models[cluster_id] = trimmed_mean_beta_aggregation(fl_server.clusters_models[cluster_id], cluster_clients_list,row_exp,beta)
   
   if refine_step == True :
 
@@ -718,71 +717,62 @@ def one_shot(fl_server : Server,list_clients : list, lambda_threshold: float, co
         list_clients[client_id].cluster_id = cluster_id
   return len(clusters_list)
 
-def trimmed_mean_beta_aggregation(list_clients,row_exp, beta)-> dict:
+def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
     """
     Compute the average parameter updates across multiple clients after trimming outliers 
     using the Trimmed Mean Beta (TMB) method.
     
     Arguments:
+        model : Server model to update
         list_clients : List of client instances with parameter updates
         beta : Fraction of extreme values to trim (e.g., 0.1 for 10%)
-    
+        row_exp : Experiment's global parameters
     Returns:
-        avg_update : Dictionary of averaged parameter updates after trimming
+        model : Updated model to return
     """
     from src.utils_training import train_model
-    # Initialize a dictionary to accumulate the updates for each parameter
-    avg_update = {}
+    import torch
 
-    # Iterate over the list of clients
+    avg_model_weights = {}
+    
     for client in list_clients:
-      client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
-      client.round_acc.append(acc)
-      # Iterate over each parameter update in the client's update
-      for name, update_tensor in client.update.items():
-          if name in avg_update:
-              # Accumulate the updates
-              avg_update[name].append(update_tensor)
-          else:
-              # Initialize the accumulator for this parameter
-              avg_update[name] = [update_tensor]
+        client.model, _, acc, client.update = train_model(
+            client.model, client.data_loader['train'], client.data_loader['val'], row_exp
+        )
+        client.round_acc.append(acc)
+        client_model_weights = client.model.state_dict()  # Get the model weights
 
-    # Now, apply trimming and calculate the average for each parameter update
+        # Iterate over each weight in the model
+        for name, weight_tensor in client_model_weights.items():
+            if name in avg_model_weights:
+                # Accumulate the weights for this parameter
+                avg_model_weights[name].append(weight_tensor)
+            else:
+                # Initialize the accumulator for this parameter
+                avg_model_weights[name] = [weight_tensor]
+
+    # Now, apply trimming and calculate the average for each model weight
     num_clients = len(list_clients)
     trim_size = int(beta * num_clients)
 
-    for name in avg_update:
-        # Stack the updates into a tensor
-        param_updates = torch.stack(avg_update[name])
+    for name in avg_model_weights:
+        # Stack the weights into a tensor
+        model_weights = torch.stack(avg_model_weights[name])
         
-        # Sort the updates along the batch dimension
-        sorted_updates, _ = torch.sort(param_updates, dim=0)
+        # Sort the weights along the batch dimension
+        sorted_weights, _ = torch.sort(model_weights, dim=0)
 
-        # Trim the top and bottom 'trim_size' updates
-        trimmed_updates = sorted_updates[trim_size:num_clients - trim_size]
+        # Trim the top and bottom 'trim_size' weights
+        trimmed_weights = sorted_weights[trim_size:num_clients - trim_size]
 
-        # Compute the mean of the remaining updates
-        avg_update[name] = torch.mean(trimmed_updates, dim=0)
+        # Compute the mean of the remaining weights
+        avg_model_weights[name] = torch.mean(trimmed_weights, dim=0)
 
-    return avg_update
-
-def update_server_model(model, update)-> nn.Module:
-    """
-    Apply the weight update to the model parameters.
-
-    Arguments:
-        model : The model to update (client model or server model)
-        update : The dictionary containing parameter updates (client.update)
-
-    Returns:
-        The model with updated parameters.
-    """
-    # Iterate over the update dictionary (client.update)
+    # Update the server model with the averaged weights
     with torch.no_grad():  # We don't want to track gradients during this operation
-        for name, update_tensor in update.items():
-            # Ensure that the update key corresponds to the model's parameter
+        for name, avg_weight_tensor in avg_model_weights.items():
             if name in model.state_dict():
-                # Subtract the update from the model's current parameters
-                model.state_dict()[name].sub_(update_tensor)
+                # Load the averaged weights into the model
+                model.state_dict()[name].copy_(avg_weight_tensor)
 
     return model

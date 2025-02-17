@@ -556,7 +556,7 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   # Flatten the matrix and remove diagonal elements
   similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]  
   lambda_threshold = np.percentile(similarity_values, 20) + 0.2
-  beta = 0.1
+  beta = 0
   connection_size_t = 2 
   print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
   
@@ -731,6 +731,7 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
         model : Updated model to return
     """
     from src.utils_training import train_model
+    from src.utils_fed import model_avg
     import torch
 
     avg_model_weights = {}
@@ -750,29 +751,31 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
             else:
                 # Initialize the accumulator for this parameter
                 avg_model_weights[name] = [weight_tensor]
+    if beta >0 : 
+        # Now, apply trimming and calculate the average for each model weight
+        num_clients = len(list_clients)
+        trim_size = int(beta * num_clients)
 
-    # Now, apply trimming and calculate the average for each model weight
-    num_clients = len(list_clients)
-    trim_size = int(beta * num_clients)
+        for name in avg_model_weights:
+            # Stack the weights into a tensor
+            model_weights = torch.stack(avg_model_weights[name])
+            
+            # Sort the weights along the batch dimension
+            sorted_weights, _ = torch.sort(model_weights, dim=0)
 
-    for name in avg_model_weights:
-        # Stack the weights into a tensor
-        model_weights = torch.stack(avg_model_weights[name])
-        
-        # Sort the weights along the batch dimension
-        sorted_weights, _ = torch.sort(model_weights, dim=0)
+            # Trim the top and bottom 'trim_size' weights
+            trimmed_weights = sorted_weights[trim_size:num_clients - trim_size]
 
-        # Trim the top and bottom 'trim_size' weights
-        trimmed_weights = sorted_weights[trim_size:num_clients - trim_size]
+            # Compute the mean of the remaining weights
+            avg_model_weights[name] = torch.mean(trimmed_weights, dim=0)
 
-        # Compute the mean of the remaining weights
-        avg_model_weights[name] = torch.mean(trimmed_weights, dim=0)
-
-    # Update the server model with the averaged weights
-    with torch.no_grad():  # We don't want to track gradients during this operation
-        for name, avg_weight_tensor in avg_model_weights.items():
-            if name in model.state_dict():
-                # Load the averaged weights into the model
-                model.state_dict()[name].copy_(avg_weight_tensor)
+        # Update the server model with the averaged weights
+        with torch.no_grad():  # We don't want to track gradients during this operation
+            for name, avg_weight_tensor in avg_model_weights.items():
+                if name in model.state_dict():
+                    # Load the averaged weights into the model
+                    model.state_dict()[name].copy_(avg_weight_tensor)
+    else : 
+        model = model_avg(list_clients,ponderation = False)
 
     return model

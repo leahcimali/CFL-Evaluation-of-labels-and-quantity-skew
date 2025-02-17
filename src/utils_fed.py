@@ -359,13 +359,18 @@ def init_server_cluster(fl_server : Server, list_clients : list, row_exp : dict,
         row_exp : Dictionary containing the different global experiement parameters
 
         p_expert_opintion : Parameter to avoid completly random assignment if neeed (default to 0)
+        
+        ifca_seed : Seed for model initialization to allow reproducibility. Different seed than data distribution seed.
     """
     
     from src.models import GenericLinearModel, GenericConvModel
     import numpy as np
     import copy
-
-    np.random.seed(row_exp['seed'])
+    
+    try:
+        torch.manual_seed(int(row_exp['params']))
+    except ValueError:
+        torch.manual_seed(42)
 
     list_heterogeneities = list(dict.fromkeys([client.heterogeneity_class for client in list_clients]))
 

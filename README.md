@@ -26,7 +26,7 @@ exp_type, params
 
         srfca,"(<lambda>,<beta>)": Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm. <lambda> is the distance threshold for clustering, <beta> is the trimmed mean parameter
         
-        cornsflqs, <metric> : cornsflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
+        cornflqs, <metric> : cornflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
 
 dataset
 

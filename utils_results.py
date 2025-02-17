@@ -289,6 +289,86 @@ def summarize_results(base_path) -> None:
     return
 
 
+def granular_results(base_path) -> None : 
+    """
+    Processes experimental results to compute and save accuracy statistics by class and skew type.
+    Parameters:
+    df_exp_results (pd.DataFrame): DataFrame containing experimental results with columns 'heterogeneity_class', 'skew', and 'accuracy'.
+    dict_exp_results (dict): Dictionary containing experiment metadata with keys 'exp_type', 'dataset', 'heterogeneity_class', and 'skew'.
+    Returns:
+    None: The function saves the processed results to a CSV file based on the skew type.
+    """
+    import pandas as pd
+    from pathlib import Path
+    from numpy import mean, std
+    pathlist = [path for path in Path(base_path).rglob('*.csv') if 'summarized_results' not in str(path) and 'noqs.csv' not in str(path) and 'qs1.csv' not in str(path) and 'qs2.csv' not in str(path)]
+    
+    for path in pathlist:
+        
+        df_exp_results = pd.read_csv(path)
+
+        results_accuracy = mean(list(df_exp_results['accuracy'])) 
+        results_std = std(list(df_exp_results['accuracy']))
+
+        results_accuracy, results_std = normalize_results(results_accuracy, results_std)
+
+        accuracy =  "{:.2f}".format(results_accuracy) + " \\pm " +   "{:.2f}".format(results_std)
+
+        list_params = path.stem.split('_')      
+
+        dict_exp_results = {
+        "exp_type": list_params[0],
+        "params": list_params[1],
+        "dataset": list_params[2],  
+        "nn_model": list_params[3],
+        "heterogeneity_class": list_params[4],
+        "skew": list_params[5],
+        "number_of_clients": list_params[6],
+        "samples by_client": list_params[7],
+        "num_clusters": list_params[8],
+        "epochs": list_params[9],
+        "rounds": list_params[10],
+        "accuracy": accuracy
+        }
+
+                
+        accuracy_by_class = df_exp_results.groupby(['heterogeneity_class', 'skew'])['accuracy'].agg(['mean', 'std']).reset_index()
+        # Rename columns for clarity
+        accuracy_by_class.columns = ['heterogeneity_class', 'skew', 'mean_accuracy', 'std_accuracy']
+        # Map heterogeneity_class to class_1, class_2, etc.
+        class_mapping = {value: f'class_{i+1}' for i, value in enumerate(accuracy_by_class['heterogeneity_class'].unique())}
+        accuracy_by_class['heterogeneity_class'] = accuracy_by_class['heterogeneity_class'].map(class_mapping)
+        # Concatenate the heterogeneity_class and skew columns
+        accuracy_by_class['class_skew'] = accuracy_by_class['heterogeneity_class'].astype(str) + '_' + accuracy_by_class['skew']
+        accuracy_by_class['accuracy'] = accuracy_by_class['mean_accuracy'].round(2).astype(str) + ' \pm ' + accuracy_by_class['std_accuracy'].round(2).astype(str)
+        accuracy_by_class.drop(columns=['heterogeneity_class', 'skew','mean_accuracy','std_accuracy'], inplace=True)
+        df = accuracy_by_class.pivot_table(index=None, columns='class_skew', values='accuracy', aggfunc='first')
+        df.columns.name = None
+        df.reset_index(drop=True, inplace=True)
+        # Add the exp_type, dataset, heterogeneity_class, and skew to the dataframe
+        df['exp_type'] = dict_exp_results['exp_type']
+        df['dataset'] = dict_exp_results['dataset']
+        df['heterogeneity_class'] = dict_exp_results['heterogeneity_class']
+        df['skew'] = dict_exp_results['skew']
+        
+        # Reorder columns to place the new columns at the beginning
+        cols = ['exp_type', 'dataset', 'heterogeneity_class', 'skew'] + [col for col in df.columns if col not in ['exp_type', 'dataset', 'heterogeneity_class', 'skew']]
+        df = df[cols]
+        granular_results_path = Path('granular_results')
+        granular_results_path.mkdir(parents=True, exist_ok=True)
+        if dict_exp_results['skew'] == 'quantity-skew-type-1':
+            file_path = "granular_results/qs1.csv"
+        elif dict_exp_results['skew'] == 'quantity-skew-type-2':
+            file_path = "granular_results/qs2.csv"
+        else:
+            file_path = "granular_results/noqs.csv"
+
+        if Path(file_path).exists():
+            df.to_csv(file_path, mode='a', header=False, float_format='%.2f', index=False, na_rep="n/a")
+        else:
+            df.to_csv(file_path, float_format='%.2f', index=False, na_rep="n/a")
+    return
+
 
 
 if __name__ == "__main__":
@@ -298,5 +378,5 @@ if __name__ == "__main__":
     else:
         base_path = "results/"
     save_histograms(base_path)
-
     summarize_results(base_path)
+    granular_results(base_path)

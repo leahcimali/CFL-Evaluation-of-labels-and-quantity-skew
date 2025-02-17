@@ -166,3 +166,4 @@ datasets/*
 *.sh
 Archive/*
 server.ts
+granular_results/*

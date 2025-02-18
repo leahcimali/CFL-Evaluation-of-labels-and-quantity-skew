@@ -28,7 +28,7 @@ def shuffle_list(list_samples : int, seed : int) -> list:
     return shuffled_list
 
 
-def create_label_dict(dataset : str, nn_model : str) -> dict:
+def create_label_dict(dataset : str, nn_model : str) -> tuple:
     
     """Create a dictionary of dataset samples
 
@@ -37,7 +37,7 @@ def create_label_dict(dataset : str, nn_model : str) -> dict:
         nn_model : the training model type ('linear' or 'convolutional') 
 
     Returns:
-        label_dict : A dictionary of data of the form {'x': [], 'y': []}
+        label_dict, label_test_dict : Dictionaries of data of the form {'x': [], 'y': []}
 
     Raises:
         Error : if the dataset name is unrecognized
@@ -54,39 +54,53 @@ def create_label_dict(dataset : str, nn_model : str) -> dict:
     if dataset == "fashion-mnist":
         fashion_mnist = torchvision.datasets.FashionMNIST("datasets", download=True)
         (x_data, y_data) = fashion_mnist.data, fashion_mnist.targets
+        fashion_mnist_test = torchvision.datasets.FashionMNIST("datasets", train = False, download=True)
+        (x_test, y_test) = fashion_mnist_test.data, fashion_mnist_test.targets
         if nn_model == "convolutional":
             x_data = x_data.unsqueeze(3) # Change shape to (samples, 1, H, W)
-        
+            x_test = x_test.unsqueeze(3) # Change shape to (samples, 1, H, W)
     elif dataset == 'mnist':
         mnist = torchvision.datasets.MNIST("datasets", download=True)
         (x_data, y_data) = mnist.data, mnist.targets
+        mnist_test = torchvision.datasets.MNIST("datasets", train = False, download=True)
+        (x_test, y_test) = mnist_test.data, mnist_test.targets
+        
         if nn_model == "convolutional":
             x_data = x_data.unsqueeze(3) # Change shape to (samples, 1, H, W)
+            x_test = x_test.unsqueeze(3)
     
     elif dataset == 'kmnist':
         kmnist = torchvision.datasets.KMNIST("datasets", download=True)
         x_data, y_data = kmnist.data, kmnist.targets
+        kmnist_test = torchvision.datasets.KMNIST("datasets", train = False, download=True)
+        x_test, y_test = kmnist_test.data, kmnist_test.targets
         if nn_model == "convolutional":
             x_data = x_data.unsqueeze(3) # Change shape to (samples, 1, H, W)
-            
+            x_test = x_test.unsqueeze(3)
     elif dataset == "cifar10":
         if nn_model == "linear":
             raise ValueError("CIFAR-10 cannot be used with a linear model. Please use a convolutional model.")
 
         cifar10 = torchvision.datasets.CIFAR10("datasets", download=True)
         x_data, y_data = cifar10.data, cifar10.targets # (samples, H, W, C)
+        cifar10_test = torchvision.datasets.CIFAR10("datasets", train = False, download=True)
+        x_test, y_test = cifar10_test.data, cifar10_test.targets
+    
     else:
         sys.exit("Unrecognized dataset. Please make sure you are using one of the following ['mnist', fashion-mnist', 'kmnist']")    
 
     label_dict = {}
-
+    label_dict_test = {}
     for label in range(10):
        
         label_indices = np.where(np.array(y_data) == label)[0]   
         label_samples_x = x_data[label_indices]
         label_dict[label] = label_samples_x
+        label_indices_test = np.where(np.array(y_test) == label)[0]
+        label_samples_x_test = x_test[label_indices_test]
+        label_dict_test[label] = label_samples_x_test
         
-    return label_dict
+    return label_dict, label_dict_test
 
 
 def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : str, nn_model : str) -> dict:
@@ -105,26 +119,32 @@ def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : st
     
     import numpy as np 
 
-    label_dict = create_label_dict(dataset, nn_model)
+    label_dict,label_dict_test = create_label_dict(dataset, nn_model)
+    
 
     clients_dictionary = {}
     client_dataset = {}
 
     for client in range(num_clients):
         
-        clients_dictionary[client] = {}    
+        clients_dictionary[client] = {'train': {}, 'test': {}}    
         
         for label in range(10):
         
-            clients_dictionary[client][label]= label_dict[label][client*num_samples_by_label:(client+1)*num_samples_by_label]
+            clients_dictionary[client]['train'][label]= label_dict[label][client*num_samples_by_label:(client+1)*num_samples_by_label]
+            clients_dictionary[client]['test'][label]= label_dict_test[label][client*num_samples_by_label//6:(client+1)*num_samples_by_label//6]
     
     for client in range(num_clients):
     
         client_dataset[client] = {}    
     
-        client_dataset[client]['x'] = np.concatenate([clients_dictionary[client][label] for label in range(10)], axis=0)
+        client_dataset[client]['x'] = np.concatenate([clients_dictionary[client]['train'][label] for label in range(10)], axis=0)
     
-        client_dataset[client]['y'] = np.concatenate([[label]*len(clients_dictionary[client][label]) for label in range(10)], axis=0)
+        client_dataset[client]['y'] = np.concatenate([[label]*len(clients_dictionary[client]['train'][label]) for label in range(10)], axis=0)
+        
+        client_dataset[client]['x_test'] = np.concatenate([clients_dictionary[client]['test'][label] for label in range(10)], axis=0)
+        
+        client_dataset[client]['y_test'] = np.concatenate([[label]*len(clients_dictionary[client]['test'][label]) for label in range(10)], axis=0)
     
     return client_dataset
 
@@ -142,20 +162,26 @@ def rotate_images(client: Client, rotation: int) -> None:
     import numpy as np
 
     images = client.data['x']
-
+    test_images = client.data['x_test']
     if rotation > 0 :
 
         rotated_images = []
-    
+        rotated_images_test = []
         for img in images:
     
             orig_shape = img.shape             
             rotated_img = np.rot90(img, k=rotation//90)  # Rotate image by specified angle 
             rotated_img = rotated_img.reshape(*orig_shape)
             rotated_images.append(rotated_img)   
-    
+        for img in test_images:    
+            
+            orig_shape = img.shape             
+            rotated_img_test = np.rot90(img, k=rotation//90)  # Rotate image by specified angle 
+            rotated_img_test = rotated_img_test.reshape(*orig_shape)
+            rotated_images_test.append(rotated_img)
+            
         client.data['x'] = np.array(rotated_images)
-
+        client.data['x_test'] = np.array(rotated_images_test)
     return
 
 import torch 
@@ -259,13 +285,11 @@ def data_preparation(client: Client, row_exp: dict) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Split into train, validation, and test sets
-    x_data, x_test, y_data, y_test = train_test_split(
-        client.data['x'], client.data['y'], test_size=0.3, 
-        random_state=row_exp['seed'], stratify=client.data['y']
-    )
-    x_train, x_val, y_train, y_val  = train_test_split(
-        x_data, y_data, test_size=0.25, random_state=42
-    )
+    x_train, x_val, y_train, y_val = train_test_split(
+        client.data['x'], client.data['y'], test_size=0.2, 
+        random_state=row_exp['seed'], stratify=client.data['y'])
+    
+    x_test, y_test = client.data['x_test'], client.data['y_test']
     
     # Define data augmentation transforms
     train_transform, val_transform, test_transform = data_transformation(row_exp)
@@ -631,12 +655,15 @@ def apply_features_skew(list_clients: list, row_exp: dict) -> list:
         for client in list_clients[start_index:end_index]:
             if skew_type == 'erosion':
                 client.data['x'] = erode_images(client.data['x'])
+                client.data['x_test'] = erode_images(client.data['x_test'])
                 client.heterogeneity_class = 'erosion'
             elif skew_type == 'dilatation':
                 client.data['x'] = dilate_images(client.data['x'])
+                client.data['x_test'] = dilate_images(client.data['x_test'])    
                 client.heterogeneity_class = 'dilatation'
             elif skew_type == 'big_dilatation':
                 client.data['x'] = dilate_images(client.data['x'], kernel_size=(8, 8))
+                client.data['x_test'] = dilate_images(client.data['x_test'], kernel_size=(8, 8))
                 client.heterogeneity_class = 'big_dilatation'
             else: 
                 client.heterogeneity_class = 'none'
@@ -658,15 +685,21 @@ def swap_labels(labels : list, client : Client, heterogeneity : int) -> Client:
         Client with labels swapped
     """
 
-    newlabellist = client.data['y'] 
+    newlabellist = client.data['y']
+    newlabellist_test = client.data['y_test'] 
 
     otherlabelindex = newlabellist==labels[1]
-
+    otherlabelindex_test = newlabellist_test==labels[1]
+    
     newlabellist[newlabellist==labels[0]]=labels[1]
-
+    newlabellist_test[newlabellist_test==labels[0]]=labels[1]
+    
     newlabellist[otherlabelindex] = labels[0]
-
+    newlabellist_test[otherlabelindex_test] = labels[0]
+    
     client.data['y']= newlabellist
+    client.data['y_test'] = newlabellist_test
+    
     client.heterogeneity_class = heterogeneity
     return client
 
@@ -765,14 +798,14 @@ def unbalancing(client: Client, ratio_list: list) -> Client:
     
     return client
 
-def dilate_images(x_train : ndarray, kernel_size : tuple = (3, 3)) -> ndarray:
+def dilate_images(x : ndarray, kernel_size : tuple = (3, 3)) -> ndarray:
     
     """ Perform dilation operation on a batch of images using a given kernel.
     Make image 'bolder' for features distribution skew setup
     
     
     Arguments:
-        x_train : Input batch of images (3D array with shape (n, height, width)).
+        x : Input batch of images (3D array with shape (n, height, width)).
         kernel_size : Size of the structuring element/kernel for dilation.
 
     Returns:
@@ -782,29 +815,29 @@ def dilate_images(x_train : ndarray, kernel_size : tuple = (3, 3)) -> ndarray:
     import cv2
     import numpy as np 
 
-    n = x_train.shape[0] 
+    n = x.shape[0]
 
-    dilated_images = np.zeros_like(x_train, dtype=np.uint8)
-
+    dilated_images = np.zeros_like(x, dtype=np.uint8)
+    
     # Create the kernel for dilation
     kernel = np.ones(kernel_size, np.uint8)
 
     for i in range(n):
     
-        dilated_image = cv2.dilate(x_train[i], kernel, iterations=1)
+        dilated_image = cv2.dilate(x[i], kernel, iterations=1)
     
         dilated_images[i] = dilated_image
 
     return dilated_images
 
 
-def erode_images(x_train : ndarray, kernel_size : tuple =(3, 3)) -> ndarray:
+def erode_images(x : ndarray, kernel_size : tuple =(3, 3)) -> ndarray:
     """
     Perform erosion operation on a batch of images using a given kernel.
     Make image 'finner' for features distribution skew setup
 
     Arguments:
-        x_train : Input batch of images (3D array with shape (n, height, width)).
+        x : Input batch of images (3D array with shape (n, height, width)).
         kernel_size :  Size of the structuring element/kernel for erosion.
 
     Returns:
@@ -814,8 +847,8 @@ def erode_images(x_train : ndarray, kernel_size : tuple =(3, 3)) -> ndarray:
     import cv2
     import numpy as np 
 
-    n = x_train.shape[0]  
-    eroded_images = np.zeros_like(x_train, dtype=np.uint8)
+    n = x.shape[0]  
+    eroded_images = np.zeros_like(x, dtype=np.uint8)
 
     # Create the kernel for erosion
     kernel = np.ones(kernel_size, np.uint8)
@@ -823,7 +856,7 @@ def erode_images(x_train : ndarray, kernel_size : tuple =(3, 3)) -> ndarray:
     # Iterate over each image in the batch
     for i in range(n):
         # Perform erosion on the current image
-        eroded_image = cv2.erode(x_train[i], kernel, iterations=1)
+        eroded_image = cv2.erode(x[i], kernel, iterations=1)
         # Store the eroded image in the results array
         eroded_images[i] = eroded_image
 

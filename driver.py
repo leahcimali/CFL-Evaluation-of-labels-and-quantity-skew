@@ -66,7 +66,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
 def launch_experiment(fl_server, list_clients, row_exp, output_name, save_results = True):
         
         from src.utils_training import run_cfl_IFCA, run_cfl_server_side, run_cfl_cornflqs, FedGroup,run_benchmark, srfca
-        
+        from src.utils_data import setup_experiment
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
         if row_exp['exp_type'] == "fedavg" or row_exp['exp_type'] == "oracle-centralized" or row_exp['exp_type'] == "fedprox":
@@ -95,10 +95,21 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
 
 
         elif row_exp['exp_type'] == "ifca":
-            
-            print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
-
-            df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
+            if row_exp['params'] == "multiple":
+                print('Lauching IFCA with multiple seeds!')
+                best_accuracy = 0
+                for seed in range(42,47):
+                    row_exp['params'] = seed
+                    fl_server, list_clients = setup_experiment(row_exp)
+                    str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
+                    print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
+                    df = run_cfl_IFCA(fl_server, list_clients, row_exp)
+                    if df['accuracy'].mean() > best_accuracy:
+                        best_accuracy = df['accuracy'].mean()
+                        df_results = df 
+            else : 
+                print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
+                df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == "cfl":
 

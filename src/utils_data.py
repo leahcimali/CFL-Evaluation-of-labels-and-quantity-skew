@@ -610,6 +610,10 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,s
                                     row_exp['dataset'],
                                     row_exp['nn_model']) 
                                     for skew in list_skews] 
+    dict_clients_test = get_clients_data(row_exp['num_clients'],
+                                    n_max_samples,
+                                    row_exp['dataset'],
+                                    row_exp['nn_model'])
     list_clients = []
     if skew_type == 1 :
         for c in range(n_clients_by_skew):
@@ -617,6 +621,7 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,s
                 client = Client(c * len(list_skews)+ s, dict_clients[s][c])
                 setattr(client,"skew", "qt-skew_"+ str(list_skews[s]))
                 list_clients.append(client)
+    
     if skew_type == 2 :
         for s in range(len(list_skews)):
             for c in range(n_clients_by_skew):
@@ -624,8 +629,9 @@ def apply_quantity_skew(list_clients : list, row_exp : dict, list_skews : list,s
                 setattr(client,"skew", "qt-skew_"+ str(list_skews[s]))
                 list_clients.append(client)
 
-    for client in list_clients :
-
+    for n_client, client in enumerate(list_clients):
+        client.data['x_test'] = dict_clients_test[n_client]['x_test']
+        client.data['y_test'] = dict_clients_test[n_client]['y_test']
         data_preparation(client, row_exp)
 
     return list_clients

@@ -32,6 +32,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
     send_clusters_models_to_clients(selected_clients, fl_server)
     for client in selected_clients :
+        print("Training client ", client.id)
         client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
         if clustering_metric == 'madc' :
@@ -72,6 +73,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
         send_clusters_models_to_clients(selected_clients, fl_server)
         
         for client in selected_clients:
+            print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -167,6 +169,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     for _ in range(row_exp['rounds']):
 
         for client in list_clients:
+            print("Training client ", client.id)
             client.model, _, acc, client.update = train_model(client.model.to(device), client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -174,8 +177,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
 
         set_client_cluster(fl_server, list_clients, row_exp)
 
-    for client in list_clients :
-
+    for client in list_clients : 
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])
         setattr(client, 'accuracy', acc)
 
@@ -216,6 +218,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     for client in list_clients:
+        print("Training client ", client.id)
         client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
     
@@ -232,6 +235,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         fedavg(fl_server, list_clients)
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
+            print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -240,6 +244,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         if round <= row_exp['rounds']//4 :
             set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
+            print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
             client.round_acc.append(acc)
 
@@ -449,7 +454,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         result['train_loss'] = torch.stack(train_losses).mean().item()
 
         # Print epoch results and add to history
-        model.epoch_end(epoch, result)
+        #model.epoch_end(epoch, result)
         history.append(result)
 
     # Final validation accuracy
@@ -470,7 +475,6 @@ def test_model(model: nn.Module, test_loader: DataLoader) -> float:
         model : the input server model
         test_loader : DataLoader with the dataset to use for testing
     """
-    
     criterion = nn.CrossEntropyLoss()
 
     # Set device to CUDA if available
@@ -545,7 +549,9 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   send_clusters_models_to_clients(list_clients,fl_server)
 
   # First Training
-  for client in list_clients : 
+  for client in list_clients :
+      
+    print("Training client ", client.id)
     client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
     client.round_acc.append(acc)
   
@@ -575,7 +581,6 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
     refine(fl_server,list_clients,row_exp,beta,lambda_threshold,connection_size_t,refine_step)
 
   for client in list_clients :
-
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    
         setattr(client, 'accuracy', acc)
 
@@ -737,6 +742,7 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
     avg_model_weights = {}
     
     for client in list_clients:
+        print("Training client ", client.id)
         client.model, _, acc, client.update = train_model(
             client.model, client.data_loader['train'], client.data_loader['val'], row_exp
         )

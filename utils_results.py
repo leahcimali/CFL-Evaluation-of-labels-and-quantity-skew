@@ -235,7 +235,7 @@ def summarize_results(base_path) -> None:
             results_std = std(list(df_exp_results['accuracy']))
 
             results_accuracy, results_std = normalize_results(results_accuracy, results_std)
-
+            num_clusters = len(df_exp_results['cluster_id'].unique())
             accuracy =  "{:.2f}".format(results_accuracy) + " \\pm " +   "{:.2f}".format(results_std)
 
             list_params = path.stem.split('_')      
@@ -249,7 +249,7 @@ def summarize_results(base_path) -> None:
             "skew": list_params[5],
             "number_of_clients": list_params[6],
             "samples by_client": list_params[7],
-            "num_clusters": list_params[8],
+            "num_clusters": num_clusters,
             "epochs": list_params[9],
             "rounds": list_params[10],
             "accuracy": accuracy
@@ -301,6 +301,8 @@ def granular_results(base_path) -> None :
     import pandas as pd
     from pathlib import Path
     from numpy import mean, std
+    from src.metrics import calc_global_metrics
+
     pathlist = [path for path in Path(base_path).rglob('*.csv') if 'summarized_results' not in str(path) and 'noqs.csv' not in str(path) and 'qs1.csv' not in str(path) and 'qs2.csv' not in str(path)]
     
     for path in pathlist:
@@ -309,6 +311,7 @@ def granular_results(base_path) -> None :
 
         results_accuracy = mean(list(df_exp_results['accuracy'])) 
         results_std = std(list(df_exp_results['accuracy']))
+        num_clusters = len(df_exp_results['cluster_id'].unique())
 
         results_accuracy, results_std = normalize_results(results_accuracy, results_std)
 
@@ -325,13 +328,25 @@ def granular_results(base_path) -> None :
         "skew": list_params[5],
         "number_of_clients": list_params[6],
         "samples by_client": list_params[7],
-        "num_clusters": list_params[8],
+        "num_clusters": num_clusters,
         "epochs": list_params[9],
         "rounds": list_params[10],
         "accuracy": accuracy
         }
 
+        try:
                 
+            labels_true = list(df_exp_results['heterogeneity_class'])
+            labels_pred = list(df_exp_results['cluster_id'])
+            
+            dict_metrics = calc_global_metrics(labels_true=labels_true, labels_pred=labels_pred)
+        
+            
+        
+        except:
+
+            print(f"Warning: Could not calculate cluster metrics for file {path}")
+            
         accuracy_by_class = df_exp_results.groupby(['heterogeneity_class', 'skew'])['accuracy'].agg(['mean', 'std']).reset_index()
         # Rename columns for clarity
         accuracy_by_class.columns = ['heterogeneity_class', 'skew', 'mean_accuracy', 'std_accuracy']
@@ -347,12 +362,19 @@ def granular_results(base_path) -> None :
         df.reset_index(drop=True, inplace=True)
         # Add the exp_type, dataset, heterogeneity_class, and skew to the dataframe
         df['exp_type'] = dict_exp_results['exp_type']
+        df['params'] = dict_exp_results['params']
         df['dataset'] = dict_exp_results['dataset']
         df['heterogeneity_class'] = dict_exp_results['heterogeneity_class']
         df['skew'] = dict_exp_results['skew']
+        df['global_accuracy'] = accuracy
+        df['ARI'] = dict_metrics['ARI']
+        df['AMI'] = dict_metrics['AMI']
+        df['homogeneity'] = dict_metrics['hom']
+        df['completeness'] = dict_metrics['cmplt']
+        df['v_measure'] = dict_metrics['vm']
         
         # Reorder columns to place the new columns at the beginning
-        cols = ['exp_type', 'dataset', 'heterogeneity_class', 'skew'] + [col for col in df.columns if col not in ['exp_type', 'dataset', 'heterogeneity_class', 'skew']]
+        cols = ['exp_type','params', 'dataset', 'heterogeneity_class', 'skew'] + [col for col in df.columns if col not in ['exp_type','params', 'dataset', 'heterogeneity_class', 'skew']]
         df = df[cols]
         granular_results_path = Path('granular_results')
         granular_results_path.mkdir(parents=True, exist_ok=True)

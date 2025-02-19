@@ -294,15 +294,27 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
 
     if row_exp['exp_type'] == 'oracle-centralized':
         curr_model = fl_server.model
-        for heterogeneity_class in list_heterogeneities:
-            list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
-            train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
+        # Concept shift on labels have contradictory labels, so they need to be separated.
+        if row_exp['heterogeneity_type'] == 'concept-shift-on-labels':
+            
+            for heterogeneity_class in list_heterogeneities:
+                list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
+                train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
+                model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
+
+                global_acc = test_model(model_trained, test_loader) 
+                        
+                for client in list_clients_filtered : 
+
+                    setattr(client, 'accuracy', global_acc)
+        else :
+            train_loader, val_loader, test_loader = centralize_data(list_clients,row_exp)
             model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
 
             global_acc = test_model(model_trained, test_loader) 
-                    
+                        
             for client in list_clients_filtered : 
-    
+
                 setattr(client, 'accuracy', global_acc)
     
     elif row_exp['exp_type'] == "fedavg":

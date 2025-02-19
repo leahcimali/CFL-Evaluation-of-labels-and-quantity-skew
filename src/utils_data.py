@@ -457,8 +457,6 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
         list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
 
-    for client in list_clients:
-        print(len(client.data['x_test']))
     return list_clients
 
 

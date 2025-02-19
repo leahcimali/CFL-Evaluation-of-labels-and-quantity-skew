@@ -567,6 +567,10 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
   
   row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
+  while row_exp['num_clusters'] < 4 and lambda_threshold > np.percentile(similarity_values, 10):
+    lambda_threshold = lambda_threshold - 0.1
+    row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
+
   fl_server.num_clusters = row_exp['num_clusters']
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
   print('Initialized Clusters : '+ str(fl_server.num_clusters))

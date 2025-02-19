@@ -564,11 +564,14 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   lambda_threshold = np.percentile(similarity_values, 20) + 0.2
   beta = 0
   connection_size_t = 2 
-  print('Hyper-parameters : ', lambda_threshold,connection_size_t,beta)
+  print('Distance Threshold : ', lambda_threshold)
   
   row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
   while row_exp['num_clusters'] < 4 and lambda_threshold > np.percentile(similarity_values, 10):
+    
     lambda_threshold = lambda_threshold - 0.1
+    print('Updated Distance Threshold : ', lambda_threshold)
+
     row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
 
   fl_server.num_clusters = row_exp['num_clusters']

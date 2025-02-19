@@ -178,14 +178,16 @@ def rotate_images(client: Client, rotation: int) -> None:
             rotated_img = np.rot90(img, k=rotation//90)  # Rotate image by specified angle 
             rotated_img = rotated_img.reshape(*orig_shape)
             rotated_images.append(rotated_img)   
-        for img in test_images:    
-            
-            orig_shape = img.shape             
-            rotated_img_test = np.rot90(img, k=rotation//90)  # Rotate image by specified angle 
-            rotated_img_test = rotated_img_test.reshape(*orig_shape)
-            rotated_images_test.append(rotated_img)
-            
+        
         client.data['x'] = np.array(rotated_images)
+        
+        for img_test in test_images:    
+            
+            orig_shape_test = img.shape             
+            rotated_img_test = np.rot90(img_test, k=rotation//90)  # Rotate image by specified angle 
+            rotated_img_test = rotated_img_test.reshape(*orig_shape_test)
+            rotated_images_test.append(rotated_img_test)
+            
         client.data['x_test'] = np.array(rotated_images_test)
     return
 

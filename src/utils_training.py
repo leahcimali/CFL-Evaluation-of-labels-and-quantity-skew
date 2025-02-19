@@ -313,7 +313,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
 
             global_acc = test_model(model_trained, test_loader) 
                         
-            for client in list_clients_filtered : 
+            for client in list_clients : 
 
                 setattr(client, 'accuracy', global_acc)
     

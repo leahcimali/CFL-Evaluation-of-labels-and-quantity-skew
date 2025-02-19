@@ -11,7 +11,8 @@ from src.fedclass import Server
     
         
 
-def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated : bool = True, alpha :int =6)-> None:
+def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',
+              ponderated : bool = True, client_sampling = 0.25)-> None:
     """ Cold start clustering for iterative server-side CFL. Create first clustering iteration using a subsample of all clients. 
     Credit -> Inspired by https://github.com/morningD/FlexCFL
     
@@ -22,14 +23,15 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
         row_exp : The current experiment's global parameters
         algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
         clustering_metric : Euclidean, cosine or MADC
-        alpha : Parameter for client selection
+        client_sampling : Parameter for client selection
         coldstart : If the cold start algorithm is done 
     """
     import random
     from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, send_clusters_models_to_clients,client_migration
     import copy
     # select a subsample of clients for coldstart
-    selected_clients = random.sample(list_clients, k=min(row_exp['num_clusters']*alpha, len(list_clients)))
+    
+    selected_clients = random.sample(list_clients, k=int(client_sampling*len(list_clients)))
     send_clusters_models_to_clients(selected_clients, fl_server)
     for client in selected_clients :
         print("Training client ", client.id)
@@ -63,6 +65,9 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     from src.utils_fed import fedavg, send_clusters_models_to_clients,client_migration
     import copy
     # Cold_start
+    # Because of client selection we need to multiply the number of rounds by 4 to compare with other algorithms. 
+    
+    row_exp['rounds'] = row_exp['rounds'] * 4  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     ColdStart(fl_server,list_clients,row_exp,algorithm,clustering_metric)
@@ -116,6 +121,10 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
     import torch 
 
     torch.manual_seed(row_exp['seed'])
+    
+    # Half the rounds before clustering and half after
+
+    row_exp['rounds'] =  row_exp['rounds']//2
     
     fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=ponderated)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
@@ -210,10 +219,10 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     torch.manual_seed(row_exp['seed'])
     
     # Cold start
-    cold_start = row_exp
-    #cold_start['rounds'] = 1
+    row_exp['rounds'] =  row_exp['rounds']//2
+    
     # Train the federated model with unponderated fedavg for n rounds
-    fl_server = train_federated(fl_server, list_clients, cold_start, use_clusters_models = False, ponderated=False)
+    fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=False)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
@@ -227,18 +236,20 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
             model_update = True
         else :
             model_update = False
+        
         if algorithm == 'agglomerative' :
             Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=model_update)
 
         elif algorithm == 'kmeans': 
             k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],clustering_metric,model_update)
         fedavg(fl_server, list_clients)
+        
         set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
-
+    '''
     for round in range(row_exp['rounds']//2):
         fedavg(fl_server, list_clients) # Do fedavg by cluster
         if round <= row_exp['rounds']//4 :
@@ -247,7 +258,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
             client.round_acc.append(acc)
-
+    '''
     for client in list_clients :
 
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    

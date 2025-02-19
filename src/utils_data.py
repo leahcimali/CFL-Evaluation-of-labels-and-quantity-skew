@@ -130,9 +130,14 @@ def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : st
         clients_dictionary[client] = {'train': {}, 'test': {}}    
         
         for label in range(10):
-        
+            if num_samples_by_label > (len(label_dict[label])//num_clients):
+                
+                num_samples_by_label = len(label_dict[label])//num_clients
+
             clients_dictionary[client]['train'][label]= label_dict[label][client*num_samples_by_label:(client+1)*num_samples_by_label]
-            clients_dictionary[client]['test'][label]= label_dict_test[label][client*num_samples_by_label//6:(client+1)*num_samples_by_label//6]
+            test_num_samples_by_label = len(label_dict_test[label]) // num_clients
+
+            clients_dictionary[client]['test'][label]= label_dict_test[label][client*test_num_samples_by_label:(client+1)*test_num_samples_by_label]
     
     for client in range(num_clients):
     
@@ -452,7 +457,8 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
         list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
 
-
+    for client in list_clients:
+        print(len(client.data['x_test']))
     return list_clients
 
 

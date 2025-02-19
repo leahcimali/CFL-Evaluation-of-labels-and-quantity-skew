@@ -66,7 +66,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     import copy
     # Cold_start
     # Because of client selection we need to multiply the number of rounds by 4 to compare with other algorithms. 
-    
+
     row_exp['rounds'] = row_exp['rounds'] * 4  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
@@ -572,17 +572,22 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   
   # Flatten the matrix and remove diagonal elements
   similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]  
-  lambda_threshold = np.percentile(similarity_values, 20) + 0.2
+  percentile = 25
+  lambda_threshold = np.percentile(similarity_values,percentile)
   beta = 0
   connection_size_t = 2 
   print('Distance Threshold : ', lambda_threshold)
   
   row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
-  while row_exp['num_clusters'] < 4 and lambda_threshold > np.percentile(similarity_values, 10):
+  while percentile > 10 :
+    percentile = percentile - 3
+    lambda_threshold = np.percentile(similarity_values, percentile)+ 0.0001
+    if one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix) > row_exp['num_clusters'] :
+        print('Updated Distance Threshold : ', lambda_threshold)
+        row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
+        break
     
-    lambda_threshold = lambda_threshold - 0.1
-    print('Updated Distance Threshold : ', lambda_threshold)
-
+    
     row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
 
   fl_server.num_clusters = row_exp['num_clusters']
@@ -594,7 +599,7 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
     # REFINE STEP
     print('Doing Refine step')
     refine_step = True
-    if round >2 :
+    if round > 3 :
        refine_step = False
     refine(fl_server,list_clients,row_exp,beta,lambda_threshold,connection_size_t,refine_step)
 

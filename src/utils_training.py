@@ -589,7 +589,7 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
   similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]  
   percentile = 25
   lambda_threshold = np.percentile(similarity_values,percentile)
-  beta = 0
+  beta = 0.15
   connection_size_t = 2 
   print('Distance Threshold : ', lambda_threshold)
   
@@ -763,7 +763,7 @@ def one_shot(fl_server : Server,list_clients : list, lambda_threshold: float, co
 def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
     """
     Compute the average parameter updates across multiple clients after trimming outliers 
-    using the Trimmed Mean Beta (TMB) method.
+    using the Trimmed Mean Beta (TMB) method, and aggregate using dataset size as weights.
     
     Arguments:
         model : Server model to update
@@ -776,53 +776,59 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
     from src.utils_training import train_model
     from src.utils_fed import model_avg
     import torch
-
-    avg_model_weights = {}
+    import copy 
     
+    if beta < 0 or beta >= 0.5:
+        raise ValueError("beta must be in the range [0, 0.5).")
+
+    # Step 1: Train each client and collect their model weights
     for client in list_clients:
         print("Training client ", client.id)
         client.model, _, acc, client.update = train_model(
             client.model, client.data_loader['train'], client.data_loader['val'], row_exp
         )
         client.round_acc.append(acc)
-        client_model_weights = client.model.state_dict()  # Get the model weights
 
-        # Iterate over each weight in the model
-        for name, weight_tensor in client_model_weights.items():
-            if name in avg_model_weights:
-                # Accumulate the weights for this parameter
-                avg_model_weights[name].append(weight_tensor)
-            else:
-                # Initialize the accumulator for this parameter
-                avg_model_weights[name] = [weight_tensor]
-    if beta >0 : 
-        # Now, apply trimming and calculate the average for each model weight
-        num_clients = len(list_clients)
-        trim_size = int(beta * num_clients)
+    # Step 2: Create a list of model weights for comparison
+    list_client_weights = []
 
-        for name in avg_model_weights:
-            # Stack the weights into a tensor
-            model_weights = torch.stack(avg_model_weights[name])
-            
-            # Sort the weights along the batch dimension
-            sorted_weights, _ = torch.sort(model_weights, dim=0)
+    for client in list_clients:
+        
+        client_wts = {}
 
-            # Trim the top and bottom 'trim_size' weights
-            trimmed_weights = sorted_weights[trim_size:num_clients - trim_size]
+        for name, param in client.model.named_parameters():
+                if param.requires_grad:
+                    client_wts[name] = param.data.clone()
+        list_client_weights.append(client_wts)
 
-            # Compute the mean of the remaining weights
-            avg_model_weights[name] = torch.mean(trimmed_weights, dim=0)
+    wts_dict_of_lists = {
+            key: torch.stack([wt[key] for wt in list_client_weights], dim=0)
+            for key in list_client_weights[0].keys()
+        }
+    
+    start_idx = int(beta * len(list_clients))
+    end_idx = int((1 - beta) * len(list_clients))
+    
+    if end_idx <= start_idx + 1 or beta == 0:
+        start_idx = 0
+        end_idx = len(list_clients)
+        avg_wt = {key: item.mean(dim=0) for key, item in wts_dict_of_lists.items()}
+    else:
+        sorted_dict = {
+            key: torch.sort(item, dim=0)[0]
+            for key, item in wts_dict_of_lists.items()
+        }
+        avg_wt = {
+            key: item[start_idx:end_idx, ...].mean(dim=0)
+            for key, item in sorted_dict.items()
+        }
+        model = copy.deepcopy(list_clients[0].model)
+        #load new averaged model 
+        
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                param.data = avg_wt[name] 
+    
+    return model            
 
-        # Update the server model with the averaged weights
-        with torch.no_grad():  # We don't want to track gradients during this operation
-            for name, avg_weight_tensor in avg_model_weights.items():
-                if name in model.state_dict():
-                    # Load the averaged weights into the model
-                    model.state_dict()[name].copy_(avg_weight_tensor)
-                    
-    elif row_exp['params'] == 'ponderated':
-        model = model_avg(list_clients,ponderation = True)
-    else : 
-        model = model_avg(list_clients,ponderation = False)
 
-    return model

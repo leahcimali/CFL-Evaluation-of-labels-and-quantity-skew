@@ -14,18 +14,18 @@ exp_type, params
 
         oracle-centralized, None : Benchmark experiment for personalized centralized learning.
         
-        oracle-cfl,None : Personalized federated learning. 
+        oracle-cfl, None : Personalized federated learning. 
 
         cfl, None : CFL. Use Kmeans on models weight for clustering
         
-        ifca, None: Iterative Federated Clustering Algorithm.
+        ifca, <parameter>: Iterative Federated Clustering Algorithm. <parameter> can take the value 'multiple', 'best' or an integer value. 'multiple'  will train ifca with 5 random models seed and keep all model metrics, 'best' will only keep the best model tested on the validation set and an in interger value will initialize models using value as random seed.   
 
         hcfl, <metric>: Server-side clustered federated learning using agglomerative clustering with a specified model <metric> (possible Values : euclidean, cosine, MADC, EDC). Default use cosine.
 
-        fedgroup, <metric>: FedGroup Algorithm 
+        fedgroup, <metric>: FedGroup Algorithm. <metric> (possible Values : MADC, EDC) 
 
-        srfca,"(<lambda>,<beta>)": Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm. <lambda> is the distance threshold for clustering, <beta> is the trimmed mean parameter
-        
+        srfca, None: Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm.
+
         cornflqs, <metric> : cornflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
 
 dataset

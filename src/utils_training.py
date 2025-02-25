@@ -44,7 +44,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     fedavg(fl_server, selected_clients,ponderated= ponderated)
     return
 
-def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True, alpha :int =6)-> pd.DataFrame:
+def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, alpha, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True)-> pd.DataFrame:
     """ FedGroup for one communication round
     Credit -> Inspired by https://github.com/morningD/FlexCFL
     
@@ -67,7 +67,6 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, algorithm 
     # Cold_start
     # Because of client selection we need to multiply the number of rounds by 4 to compare with other algorithms. 
 
-    row_exp['rounds'] = row_exp['rounds'] * 4  
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
     ColdStart(fl_server,list_clients,row_exp,algorithm,clustering_metric)
@@ -185,13 +184,17 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
         fedavg(fl_server, list_clients,ponderated)
 
         set_client_cluster(fl_server, list_clients, row_exp)
-
+    
+    list_clients_dict = [] 
     for client in list_clients : 
+        validation = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['val'])
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])
         setattr(client, 'accuracy', acc)
-
-    df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
-    
+        client_dict = client.to_dict()
+        client_dict['validation'] = validation
+        list_clients_dict.append(client_dict)
+        
+    df_results = pd.DataFrame.from_records(list_clients_dict)
     return df_results
 
 def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
@@ -816,6 +819,9 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
                 if name in model.state_dict():
                     # Load the averaged weights into the model
                     model.state_dict()[name].copy_(avg_weight_tensor)
+                    
+    elif row_exp['params'] == 'ponderated':
+        model = model_avg(list_clients,ponderation = True)
     else : 
         model = model_avg(list_clients,ponderation = False)
 

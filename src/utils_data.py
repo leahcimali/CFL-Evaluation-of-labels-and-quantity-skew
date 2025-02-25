@@ -292,11 +292,13 @@ def data_preparation(client: Client, row_exp: dict) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Split into train, validation, and test sets
-    x_train, x_val, y_train, y_val = train_test_split(
-        client.data['x'], client.data['y'], test_size=0.2, 
-        random_state=row_exp['seed'], stratify=client.data['y'])
+    x_train, y_train = client.data['x'], client.data['y']
     
-    x_test, y_test = client.data['x_test'], client.data['y_test']
+    #Spit test set in validation and test
+    
+    x_val, x_test, y_val, y_test = train_test_split(
+        client.data['x_test'], client.data['y_test'], test_size=0.7, 
+        random_state=row_exp['seed'], stratify=client.data['y_test'])
     
     # Define data augmentation transforms
     train_transform, val_transform, test_transform = data_transformation(row_exp)

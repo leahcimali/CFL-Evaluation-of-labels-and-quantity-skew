@@ -49,14 +49,14 @@ class Client:
     def to_dict(self):
 
         """Return a dictionary with the attributes of the Client """ 
-
-        return {
+        client_dict = {
             'id': self.id, 
             'cluster_id': self.cluster_id,
             'heterogeneity_class': self.heterogeneity_class,
-            'skew' : self.skew,
+            'skew': self.skew,
             'accuracy': self.accuracy
         }
+        return client_dict
     
     
 

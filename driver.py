@@ -57,8 +57,24 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
         traceback.print_exc()  # This will print the full traceback
 
         return 
+    if row_exp['params'] == 'multiple':
+        for model_seed in range(42,47):
+            print(f"Launching experiment with model seed {model_seed}")
+            row_exp = pd.Series({"exp_type": exp_type, "params": model_seed, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
+               "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "epochs": epochs,
+               "rounds": rounds, "seed": seed})
+                
+
+            output_name =  row_exp.to_string(header=False, index=False, name=False).replace(' ', "").replace('\n','_')
     
-    launch_experiment(fl_server, list_clients, row_exp, output_name)
+            hash_outputname = get_uid(output_name)
+
+            pathlist = Path("results").rglob('*.json')
+
+            launch_experiment(fl_server, list_clients, row_exp, output_name)
+
+    else :
+        launch_experiment(fl_server, list_clients, row_exp, output_name)
 
     return          
 
@@ -95,7 +111,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
 
 
         elif row_exp['exp_type'] == "ifca":
-            if row_exp['params'] == "multiple":
+            if row_exp['params'] == "best":
                 print('Lauching IFCA with multiple seeds!')
                 best_accuracy = 0
                 for seed in range(42,47):
@@ -104,9 +120,14 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                     str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
                     print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
                     df = run_cfl_IFCA(fl_server, list_clients, row_exp)
-                    if df['accuracy'].mean() > best_accuracy:
-                        best_accuracy = df['accuracy'].mean()
-                        df_results = df 
+                    if df['validation'].mean() > best_accuracy:
+                        best_accuracy = df['validation'].mean()
+                        df_results = df
+                    
+            elif isinstance(row_exp['params'], int)  :
+                fl_server, list_clients = setup_experiment(row_exp)
+                df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
+
             else : 
                 print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
                 df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
@@ -130,14 +151,15 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             if row_exp['params'] == 'madc':
                 print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
             
-                df_results = FedGroup(fl_server, list_clients, row_exp,algorithm= 'agglomerative', clustering_metric = 'madc' ,iterative=True)
+                df_results = FedGroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'agglomerative', clustering_metric = 'madc')
+            
             else :
                 
                 row_exp['params'] = 'edc'
                 str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
                 print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
 
-                df_results = FedGroup(fl_server, list_clients, row_exp, algorithm= 'kmeans', clustering_metric = 'edc')
+                df_results = FedGroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'kmeans', clustering_metric = 'edc')
         else:
             
             str_exp_type = row_exp['exp_type']

@@ -26,7 +26,9 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
     from pathlib import Path
     import pandas as pd
 
-    from src.utils_data import setup_experiment, get_uid 
+    from src.utils_data import setup_experiment, get_uid, global_test_data
+    # To ADD as a parameter in config file in the future
+    test = 'global'
 
     row_exp = pd.Series({"exp_type": exp_type, "params": params, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
                "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "epochs": epochs,
@@ -49,7 +51,11 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
     try:
         
         fl_server, list_clients = setup_experiment(row_exp)
-    
+        
+        # Update the test data to global 
+        if test == 'global':
+            global_test_data(list_clients, row_exp)
+        
     except Exception as e:
 
         print(f"Could not run experiment with parameters {output_name}. Exception {e}")

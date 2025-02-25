@@ -717,6 +717,28 @@ def swap_labels(labels : list, client : Client, heterogeneity : int) -> Client:
     client.heterogeneity_class = heterogeneity
     return client
 
+def global_test_data(list_clients: list, row_exp: dict) -> None:
+    """Update the test and val loader to be global for each heterogeneity class
+
+    Arguments:
+        list_clients : The list of Client Objects
+        row_exp : The current experiment's global parameters
+        
+    Returns:
+        Train and test torch DataLoaders with data of all Clients
+    """
+    
+    list_heterogeneities = list(dict.fromkeys([client.heterogeneity_class for client in list_clients]))
+    
+    for heterogeneity in list_heterogeneities:
+        list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity]
+        _, val_loader, test_loader = centralize_data(list_clients_filtered, row_exp)
+        for client in list_clients:
+            if client.heterogeneity_class == heterogeneity:
+                client.data_loader['val'] = val_loader
+                client.data_loader['test'] = test_loader
+
+    return 
 
 def centralize_data(list_clients: list, row_exp: dict) -> Tuple[DataLoader, DataLoader]:
     """Centralize data of the federated learning setup for central model comparison

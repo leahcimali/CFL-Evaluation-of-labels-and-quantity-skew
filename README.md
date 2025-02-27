@@ -26,7 +26,7 @@ exp_type, params
 
         srfca, None: Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm.
 
-        cornflqs, <metric> : cornflqs clustered federated learning. (possible Values : euclidean, cosine, MADC, EDC).
+        cornflqs, '(n,m,k)' : cornflqs clustered federated learning. n : number of rounds for cold starting clustering, m : number of rounds of iterative server/node clustering refinement. k : number of rounds of node only loss based clustering.
 
 dataset
 

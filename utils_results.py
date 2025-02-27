@@ -391,7 +391,145 @@ def granular_results(base_path) -> None :
             df.to_csv(file_path, float_format='%.2f', index=False, na_rep="n/a")
     return
 
+import pandas as pd
+import glob
+import os
+from openpyxl.styles import Font, Border, Side, Color
+from openpyxl.utils import get_column_letter
 
+# Function to extract the first number from the 'global_accuracy' string
+def extract_number1(global_accuracy):
+    if '\\pm' in global_accuracy:
+        return float(global_accuracy.split('\\pm')[0].strip())
+    else:
+        return float(global_accuracy.strip())
+
+# Function to auto-adjust column widths
+def auto_adjust_column_widths(sheet, df):
+    for col in df.columns:
+        max_length = max(len(str(col)), df[col].astype(str).map(len).max())
+        sheet.column_dimensions[get_column_letter(df.columns.get_loc(col) + 1)].width = max_length + 2
+
+# Function to apply formatting to the highest and second-highest global accuracy values
+def format_global_accuracy(sheet, df_sorted, group):
+    global_accuracies = group['global_accuracy'].apply(extract_number1).tolist()
+    indices = group.index.tolist()
+    
+    sorted_indices = sorted(indices, key=lambda x: extract_number1(df_sorted.loc[x, 'global_accuracy']), reverse=True)
+    highest_index = sorted_indices[0]
+    second_highest_index = sorted_indices[1] if len(sorted_indices) > 1 else None
+    
+    excel_row_highest = df_sorted.index.get_loc(highest_index) + 2
+    excel_row_second_highest = df_sorted.index.get_loc(second_highest_index) + 2 if second_highest_index is not None else None
+    
+    cell = sheet.cell(row=excel_row_highest, column=df_sorted.columns.get_loc('global_accuracy') + 1)
+    cell.font = Font(bold=True)
+    
+    if second_highest_index is not None:
+        cell = sheet.cell(row=excel_row_second_highest, column=df_sorted.columns.get_loc('global_accuracy') + 1)
+        cell.font = Font(bold=True, underline='single', color='585858')
+
+# Function to apply formatting to ARI values
+def format_ari_values(sheet, df_sorted, group):
+    filtered_group = group[group['ARI'] < 1]
+    
+    if not filtered_group.empty:
+        sorted_indices = filtered_group.sort_values(by='ARI', ascending=False).index.tolist()
+        highest_index_ARI = sorted_indices[0]
+        excel_row_highest_ARI = df_sorted.index.get_loc(highest_index_ARI) + 2
+        cell = sheet.cell(row=excel_row_highest_ARI, column=df_sorted.columns.get_loc('ARI') + 1)
+        cell.font = Font(bold=True, underline='single', color='585858')
+
+# Function to apply borders and formatting to specific columns
+def apply_borders_and_formatting(sheet, df_sorted, group):
+    thick_black_border = Border(bottom=Side(style='thick', color='000000'))
+    thick_vertical_border = Border(right=Side(style='thick', color='000000'))
+    
+    last_row_index = group.index[-1]
+    excel_last_row = df_sorted.index.get_loc(last_row_index) + 2
+    for col_name in df_sorted.columns:
+        col_idx = df_sorted.columns.get_loc(col_name) + 1
+        sheet.cell(row=excel_last_row, column=col_idx).border = thick_black_border
+
+    for row_idx, row in df_sorted.iterrows():
+        excel_row = df_sorted.index.get_loc(row_idx) + 2
+        ari_value = row['ARI']
+        if ari_value == 1:
+            col_idx = df_sorted.columns.get_loc('ARI') + 1
+            cell = sheet.cell(row=excel_row, column=col_idx)
+            cell.font = Font(bold=True)
+        for col_name in ['heterogeneity_class', 'params', 'ARI']:
+            col_idx = df_sorted.columns.get_loc(col_name) + 1
+            sheet.cell(row=excel_row, column=col_idx).border = thick_vertical_border
+
+# Function to apply formatting to cells with values below 50
+def format_low_values(sheet, df_sorted):
+    exclude_columns = {'AMI', 'homogeneity', 'completeness', 'v_measure'}
+    
+    for row_idx, row in df_sorted.iterrows():
+        excel_row = df_sorted.index.get_loc(row_idx) + 2
+        ari_col_idx = df_sorted.columns.get_loc('ARI') + 1
+        
+        for col_idx in range(ari_col_idx + 1, len(df_sorted.columns) + 1):
+            col_name = df_sorted.columns[col_idx - 1]
+            if col_name in exclude_columns:
+                continue
+            
+            cell_value = row[col_name]
+            try:
+                extracted_value = extract_number1(str(cell_value))
+            except (ValueError, AttributeError):
+                continue
+            
+            if extracted_value < 50:
+                cell = sheet.cell(row=excel_row, column=col_idx)
+                cell.font = Font(bold=True, color="FF0000")
+
+# Main program
+def main_excel():
+    with pd.ExcelWriter('granular_results.xlsx', engine='openpyxl') as writer:
+        for csv_file in glob.glob('granular_results/*.csv'):
+            df = pd.read_csv(csv_file)
+            df.loc[df['exp_type'] == 'oracle-centralized', 'ARI'] = 1
+            df = df.drop(columns=['skew'])
+
+            if os.path.basename(csv_file) == 'noqs.csv':
+                sheet_name = 'noqs'
+                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI',
+                         'class_1_none', 'class_2_none', 'class_3_none', 'class_4_none', 'AMI', 'homogeneity', 
+                         'completeness', 'v_measure']]
+            elif os.path.basename(csv_file) == 'qs1.csv':
+                sheet_name = 'qs1'
+                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI', 
+                         'class_1_qt-skew_0.05', 'class_2_qt-skew_0.05', 'class_3_qt-skew_0.05', 'class_4_qt-skew_0.05',
+                         'class_1_qt-skew_0.2', 'class_2_qt-skew_0.2', 'class_3_qt-skew_0.2', 'class_4_qt-skew_0.2',
+                         'class_1_qt-skew_1', 'class_2_qt-skew_1', 'class_3_qt-skew_1', 'class_4_qt-skew_1',
+                         'class_1_qt-skew_2', 'class_2_qt-skew_2', 'class_3_qt-skew_2', 'class_4_qt-skew_2',
+                         'AMI', 'homogeneity', 'completeness', 'v_measure']]
+            elif os.path.basename(csv_file) == 'qs2.csv':
+                sheet_name = 'qs2'
+                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI', 
+                        'class_1_qt-skew_0.05', 'class_4_qt-skew_0.2', 'class_2_qt-skew_1', 'class_3_qt-skew_2',
+                        'AMI', 'homogeneity', 'completeness', 'v_measure']]
+
+            exp_type_order = ['fedavg', 'fedprox', 'cfl', 'hcfl', 'fedgroup', 'ifca', 'srfca', 'cornflqs', 'oracle-centralized']
+            df['exp_type'] = pd.Categorical(df['exp_type'], categories=exp_type_order, ordered=True)
+            df['exp_type'] = df['exp_type'].apply(lambda x: '\n' + x if x == 'fedavg' else x)
+            df_sorted = df.sort_values(['dataset', 'heterogeneity_class', 'exp_type'])
+            df_sorted.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            workbook = writer.book
+            sheet = workbook[sheet_name]
+            auto_adjust_column_widths(sheet, df_sorted)
+            
+            for (dataset, heterogeneity_class), group in df_sorted.groupby(['dataset', 'heterogeneity_class']):
+                format_global_accuracy(sheet, df_sorted, group)
+                format_ari_values(sheet, df_sorted, group)
+                apply_borders_and_formatting(sheet, df_sorted, group)
+            
+            format_low_values(sheet, df_sorted)
+    
+    print("Excel file created successfully!")
 
 if __name__ == "__main__":
     import sys
@@ -399,6 +537,8 @@ if __name__ == "__main__":
         base_path = sys.argv[1]
     else:
         base_path = "results/"
+
     save_histograms(base_path)
     summarize_results(base_path)
     granular_results(base_path)
+    main_excel()

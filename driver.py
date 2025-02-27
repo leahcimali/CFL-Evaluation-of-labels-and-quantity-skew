@@ -105,7 +105,10 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         
         elif row_exp['exp_type'] == "cornflqs":
             print(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
-            # Need to add other than KMeans
+            # Use agglomerative HC + euclidean distance and ward linkage
+            df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
+            
+            '''
             if row_exp['params']== 'edc':
                 df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
             elif row_exp['params']== 'euclidean':
@@ -114,7 +117,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                 df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='madc')
             elif row_exp['params']== 'kmeans':
                 df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='euclidean')
-
+            '''
 
         elif row_exp['exp_type'] == "ifca":
             if row_exp['params'] == "best":

@@ -243,7 +243,8 @@ def summarize_results(base_path) -> None:
             dict_exp_results = {
             "exp_type": list_params[0],
             "params": list_params[1],
-            "dataset": list_params[2],  
+            "dataset": list_params[2],
+            "seed" : list_params[11],
             "nn_model": list_params[3],
             "heterogeneity_class": list_params[4],
             "skew": list_params[5],
@@ -273,15 +274,15 @@ def summarize_results(base_path) -> None:
             list_results.append(dict_exp_results)
             
     df_results = pd.DataFrame(list_results)
-    df_results.sort_values(['heterogeneity_class', 'dataset', 'exp_type', 'nn_model','number_of_clients'], inplace=True)
+    df_results.sort_values(['heterogeneity_class', 'dataset', 'seed','exp_type', 'nn_model','number_of_clients'], inplace=True)
 
     try: 
-        df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm"]]
+        df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm","seed"]]
     except KeyError as e: 
         missing_cols = [col for col in ["ARI", "AMI", "hom", "cmplt", "vm"] if col not in df_results.columns]
         for col in missing_cols:
             df_results[col] = "n/a"
-        df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm"]]
+        df_results = df_results[['exp_type', "params", 'nn_model', 'number_of_clients', 'dataset', 'num_clusters', 'heterogeneity_class', 'skew', "accuracy", "ARI", "AMI", "hom", "cmplt", "vm","seed"]]
     df_results.sort_values(['dataset', 'skew','exp_type','accuracy'], inplace=True)
 
     df_results.to_csv(Path(base_path) / "summarized_results.csv", float_format='%.2f', index=False, na_rep="n/a")
@@ -322,7 +323,8 @@ def granular_results(base_path) -> None :
         dict_exp_results = {
         "exp_type": list_params[0],
         "params": list_params[1],
-        "dataset": list_params[2],  
+        "dataset": list_params[2], 
+        "seed": list_params[11],
         "nn_model": list_params[3],
         "heterogeneity_class": list_params[4],
         "skew": list_params[5],
@@ -372,9 +374,11 @@ def granular_results(base_path) -> None :
         df['homogeneity'] = dict_metrics['hom']
         df['completeness'] = dict_metrics['cmplt']
         df['v_measure'] = dict_metrics['vm']
+        df['seed'] = dict_exp_results['seed']
+
         
         # Reorder columns to place the new columns at the beginning
-        cols = ['exp_type','params', 'dataset', 'heterogeneity_class', 'skew'] + [col for col in df.columns if col not in ['exp_type','params', 'dataset', 'heterogeneity_class', 'skew']]
+        cols = ['dataset', 'heterogeneity_class','seed','exp_type','params','skew'] + [col for col in df.columns if col not in ['exp_type','params', 'dataset', 'heterogeneity_class','seed', 'skew']]
         df = df[cols]
         granular_results_path = Path('granular_results')
         granular_results_path.mkdir(parents=True, exist_ok=True)
@@ -458,7 +462,7 @@ def apply_borders_and_formatting(sheet, df_sorted, group):
             col_idx = df_sorted.columns.get_loc('ARI') + 1
             cell = sheet.cell(row=excel_row, column=col_idx)
             cell.font = Font(bold=True)
-        for col_name in ['heterogeneity_class', 'params', 'ARI']:
+        for col_name in ['seed', 'params', 'ARI']:
             col_idx = df_sorted.columns.get_loc(col_name) + 1
             sheet.cell(row=excel_row, column=col_idx).border = thick_vertical_border
 
@@ -495,12 +499,12 @@ def main_excel():
 
             if os.path.basename(csv_file) == 'noqs.csv':
                 sheet_name = 'noqs'
-                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI',
+                df = df[['dataset', 'heterogeneity_class','seed', 'exp_type', 'params', 'global_accuracy', 'ARI',
                          'class_1_none', 'class_2_none', 'class_3_none', 'class_4_none', 'AMI', 'homogeneity', 
                          'completeness', 'v_measure']]
             elif os.path.basename(csv_file) == 'qs1.csv':
                 sheet_name = 'qs1'
-                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI', 
+                df = df[['dataset', 'heterogeneity_class', 'seed','exp_type', 'params', 'global_accuracy', 'ARI', 
                          'class_1_qt-skew_0.05', 'class_2_qt-skew_0.05', 'class_3_qt-skew_0.05', 'class_4_qt-skew_0.05',
                          'class_1_qt-skew_0.2', 'class_2_qt-skew_0.2', 'class_3_qt-skew_0.2', 'class_4_qt-skew_0.2',
                          'class_1_qt-skew_1', 'class_2_qt-skew_1', 'class_3_qt-skew_1', 'class_4_qt-skew_1',
@@ -508,7 +512,7 @@ def main_excel():
                          'AMI', 'homogeneity', 'completeness', 'v_measure']]
             elif os.path.basename(csv_file) == 'qs2.csv':
                 sheet_name = 'qs2'
-                df = df[['dataset', 'heterogeneity_class', 'exp_type', 'params', 'global_accuracy', 'ARI', 
+                df = df[['dataset', 'heterogeneity_class','seed', 'exp_type', 'params', 'global_accuracy', 'ARI', 
                         'class_1_qt-skew_0.05', 'class_4_qt-skew_0.2', 'class_2_qt-skew_1', 'class_3_qt-skew_2',
                         'AMI', 'homogeneity', 'completeness', 'v_measure']]
 
@@ -522,7 +526,7 @@ def main_excel():
             sheet = workbook[sheet_name]
             auto_adjust_column_widths(sheet, df_sorted)
             
-            for (dataset, heterogeneity_class), group in df_sorted.groupby(['dataset', 'heterogeneity_class']):
+            for _, group in df_sorted.groupby(['dataset', 'heterogeneity_class','seed']):
                 format_global_accuracy(sheet, df_sorted, group)
                 format_ari_values(sheet, df_sorted, group)
                 apply_borders_and_formatting(sheet, df_sorted, group)

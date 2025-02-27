@@ -218,13 +218,18 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, set_client_cluster
     import copy
     import torch 
-
+    import ast
     torch.manual_seed(row_exp['seed'])
-    
+    try:
+        cold_rounds, server_client_rounds, client_only_rounds = ast.literal_eval(row_exp['params'])
+    except Exception as e:
+        print('Error in params:', e, '!')
+        print('Using defaults parameters')
+        cold_rounds, server_client_rounds, client_only_rounds = 1, row_exp['rounds'] // 2, row_exp['rounds'] // 2
+            
+    row_exp['rounds'] = cold_rounds
     # Cold start
-    row_exp['rounds'] =  row_exp['rounds']//2
-    
-    # Train the federated model with unponderated fedavg for n rounds
+    # Train the federated model with unponderated fedavg for n = cold_rounds rounds
     fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=False)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
@@ -233,8 +238,8 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         print("Training client ", client.id)
         client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
-    
-    for round in range(row_exp['rounds']):
+    # Server/Client aggrement rounds
+    for round in range(server_client_rounds):
         if round == 0 :
             model_update = True
         else :
@@ -252,16 +257,15 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
-    '''
-    for round in range(row_exp['rounds']//2):
+    # Client only rounds
+    for round in range(client_only_rounds):
         fedavg(fl_server, list_clients) # Do fedavg by cluster
-        if round <= row_exp['rounds']//4 :
-            set_client_cluster(fl_server, list_clients, row_exp)
+        set_client_cluster(fl_server, list_clients, row_exp)
         for client in list_clients:
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
             client.round_acc.append(acc)
-    '''
+
     for client in list_clients :
 
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    
@@ -564,7 +568,7 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
 
     Returns:
         pd.DataFrame: A DataFrame containing the results (such as accuracy) for each client after federated rounds.
-    """
+  """
   import ast
   from src.utils_training import test_model
   from src.utils_fed import send_clusters_models_to_clients

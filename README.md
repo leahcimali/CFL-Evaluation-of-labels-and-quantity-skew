@@ -18,11 +18,11 @@ exp_type, params
 
         cfl, None : CFL. Use Kmeans on models weight for clustering
         
-        ifca, <parameter>: Iterative Federated Clustering Algorithm. <parameter> can take the value 'multiple', 'best' or an integer value. 'multiple'  will train ifca with 5 random models seed and keep all model metrics, 'best' will only keep the best model tested on the validation set and an in interger value will initialize models using value as random seed.   
-
         hcfl, <metric>: Server-side clustered federated learning using agglomerative clustering with a specified model <metric> (possible Values : euclidean, cosine, MADC, EDC). Default use cosine.
 
-        fedgroup, <metric>: FedGroup Algorithm. <metric> (possible Values : MADC, EDC) 
+        fedgroup, <metric>: FedGroup Algorithm. <metric> (possible Values : MADC, EDC)
+
+        ifca, <parameter>: Iterative Federated Clustering Algorithm. <parameter> can take the value 'multiple', 'best' or an integer value. 'multiple'  will train ifca with 5 random models seed and keep all model metrics, 'best' will only keep the best model tested on the validation set and an in interger value will initialize models using value as random seed.   
 
         srfca, None: Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm.
 

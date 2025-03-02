@@ -519,7 +519,7 @@ def main_excel():
             exp_type_order = ['fedavg', 'fedprox', 'cfl', 'hcfl', 'fedgroup', 'ifca', 'srfca', 'cornflqs', 'oracle-centralized']
             df['exp_type'] = pd.Categorical(df['exp_type'], categories=exp_type_order, ordered=True)
             df['exp_type'] = df['exp_type'].apply(lambda x: '\n' + x if x == 'fedavg' else x)
-            df_sorted = df.sort_values(['dataset', 'heterogeneity_class', 'exp_type'])
+            df_sorted = df.sort_values(['dataset', 'heterogeneity_class', 'seed','exp_type'])
             df_sorted.to_excel(writer, sheet_name=sheet_name, index=False)
             
             workbook = writer.book

@@ -167,3 +167,4 @@ datasets/*
 Archive/*
 server.ts
 granular_results/*
+granular_results.xlsx

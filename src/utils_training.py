@@ -221,7 +221,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     import ast
     torch.manual_seed(row_exp['seed'])
     try:
-        cold_rounds, server_client_rounds, client_only_rounds = ast.literal_eval(row_exp['params'])
+        cold_rounds, server_client_rounds, client_only_rounds = map(int, row_exp['params'].split('-'))
     except Exception as e:
         print('Error in params:', e, '!')
         print('Using defaults parameters')

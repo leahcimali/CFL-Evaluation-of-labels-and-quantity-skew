@@ -369,13 +369,20 @@ def granular_results(base_path) -> None :
         df['heterogeneity_class'] = dict_exp_results['heterogeneity_class']
         df['skew'] = dict_exp_results['skew']
         df['global_accuracy'] = accuracy
-        df['ARI'] = dict_metrics['ARI']
-        df['AMI'] = dict_metrics['AMI']
-        df['homogeneity'] = dict_metrics['hom']
-        df['completeness'] = dict_metrics['cmplt']
-        df['v_measure'] = dict_metrics['vm']
         df['seed'] = dict_exp_results['seed']
-
+        
+        try : 
+            df['ARI'] = dict_metrics['ARI']
+            df['AMI'] = dict_metrics['AMI']
+            df['homogeneity'] = dict_metrics['hom']
+            df['completeness'] = dict_metrics['cmplt']
+            df['v_measure'] = dict_metrics['vm']
+        except : 
+            df['ARI'] = 0.0
+            df['AMI'] = 0.0        
+            df['homogeneity'] = 0.0
+            df['completeness'] = 0.0
+            df['v_measure'] = 0.0
         
         # Reorder columns to place the new columns at the beginning
         cols = ['dataset', 'heterogeneity_class','seed','exp_type','params','skew'] + [col for col in df.columns if col not in ['exp_type','params', 'dataset', 'heterogeneity_class','seed', 'skew']]
@@ -491,7 +498,7 @@ def format_low_values(sheet, df_sorted):
 
 # Main program
 def main_excel():
-    with pd.ExcelWriter('granular_results.xlsx', engine='openpyxl') as writer:
+    with pd.ExcelWriter('granular_results.odf', engine='openpyxl') as writer:
         for csv_file in glob.glob('granular_results/*.csv'):
             df = pd.read_csv(csv_file)
             df.loc[df['exp_type'] == 'oracle-centralized', 'ARI'] = 1

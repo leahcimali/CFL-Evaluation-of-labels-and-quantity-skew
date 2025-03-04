@@ -302,7 +302,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     if row_exp['exp_type'] == 'oracle-centralized':
         curr_model = fl_server.model
         # Concept shift on labels have contradictory labels, so they need to be separated.
-        if row_exp['heterogeneity_type'] == 'concept-shift-on-labels':
+        if row_exp['params'] == 'clustering':
             
             for heterogeneity_class in list_heterogeneities:
                 list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
@@ -412,7 +412,7 @@ def evaluate(model : nn.Module, val_loader : DataLoader) -> dict:
 
 
 def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_loader: DataLoader, 
-                  row_exp: dict, mu: float = 0.0, lr = 0.001, opt_func = torch.optim.Adam):
+                  row_exp: dict, mu: float = 0.0, lr = 0.001, opt_func = torch.optim.Adam, validation = False):
     """
     Main training function for local or centralized learning with optional FedProx regularization.
     
@@ -422,7 +422,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         val_loader : DataLoader with the validation dataset
         row_exp : Experiment's global parameters
         mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
-
+        validation : Use the validation set to find the best
     Returns:
         (model, history, final_val_acc, weight_update) : Trained model, final train loss of the trained model, 
         validation set accuracy of the trained model, and the weights update of the model
@@ -438,7 +438,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
 
     # Initialize variable to accumulate gradients
     avg_grad = [torch.zeros_like(param) for param in model.parameters()]
-
+    best_acc = 0.0
     for epoch in range(row_exp['epochs']):
         model.train()
         train_losses = []
@@ -486,16 +486,28 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         # Print epoch results and add to history
         #model.epoch_end(epoch, result)
         history.append(result)
+        
+        # Update the best model if validation is True
 
+        if validation :
+            val_acc = test_model(model, val_loader)
+            if val_acc > best_acc :
+                best_acc = val_acc
+                best_model = copy.deepcopy(model)
+
+        else : 
+            best_model = model    
+    
+
+            
     # Final validation accuracy
-    val_acc = test_model(model, val_loader)
     train_loss = torch.stack(train_losses).mean().item()
     
     weight_update = {}
     for name, param in model.named_parameters():
         if name in server_model.state_dict():
             weight_update[name] = param.data - server_model.state_dict()[name]
-    return model, train_loss, val_acc, weight_update
+    return best_model, train_loss, val_acc, weight_update
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

@@ -12,7 +12,7 @@ exp_type, params
         
         fedprox, mu : Federated learning with FedProx optimization. Mu parameter for FedProx default is 0.01
 
-        oracle-centralized, None : Benchmark experiment for personalized centralized learning.
+        oracle-centralized, <parameter> : Benchmark experiment for personalized centralized learning. If <parameter> take the value 'clustering' will do different centralize model for each heterongeneity class else will centralize all data and train a global model.
         
         oracle-cfl, None : Personalized federated learning. 
 
@@ -26,7 +26,7 @@ exp_type, params
 
         srfca, None: Experiment using the SRFCA algorithm. Successive Refinement Federated Learning Algorihtm.
 
-        cornflqs, '(n,m,k)' : cornflqs clustered federated learning. n : number of rounds for cold starting clustering, m : number of rounds of iterative server/node clustering refinement. k : number of rounds of node only loss based clustering.
+        cornflqs, 'n-m-k' : cornflqs clustered federated learning. n : number of rounds for cold starting clustering, m : number of rounds of iterative server/node clustering refinement. k : number of rounds of node only loss based clustering.
 
 dataset
 
@@ -69,6 +69,7 @@ skew
     Description: The type of skew applied to the dataset. Skew refers to the uneven distribution of data across clients or heterogeneity classes.
 
     Possible Values:
+        none : Have the same number of samples on each client. 
 
         quantity-skew-type-1: Quantity skew within heterogeneity classes (i.e., uneven data distribution among clients within the same heterogeneity class).
 
@@ -104,10 +105,10 @@ rounds
 
     Description: The number of communication rounds in federated learning.
 
-    Possible Values: Any positive integer (e.g., 100, 00).
+    Possible Values: Any positive integer (e.g., 10, 100).
 
 seed
 
-    Description: The random seed for reproducibility.
+    Description: The random seed for reproducibility. Affect the data distribution of clients.
 
     Possible Values: Any integer (e.g., 4, 13).

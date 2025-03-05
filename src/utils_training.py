@@ -498,6 +498,8 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         else : 
             best_model = model    
     
+    if validation == False :
+        val_acc = test_model(model, val_loader)
 
             
     # Final validation accuracy

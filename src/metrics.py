@@ -19,7 +19,7 @@ def calc_global_metrics(labels_true: list, labels_pred: list) -> dict:
 
     homogeneity_score, completness_score, v_measure = homogeneity_completeness_v_measure(labels_true, labels_pred)
 
-    ARI_score = adjusted_rand_score = adjusted_rand_score(labels_true, labels_pred)
+    ARI_score = adjusted_rand_score(labels_true, labels_pred)
 
     AMI_score = adjusted_mutual_info_score(labels_true, labels_pred) 
     

@@ -371,19 +371,26 @@ def granular_results(base_path) -> None :
         df['global_accuracy'] = accuracy
         df['seed'] = dict_exp_results['seed']
         
-        try : 
-            df['ARI'] = dict_metrics['ARI']
-            df['AMI'] = dict_metrics['AMI']
-            df['homogeneity'] = dict_metrics['hom']
-            df['completeness'] = dict_metrics['cmplt']
-            df['v_measure'] = dict_metrics['vm']
-        except : 
+        if   df['exp_type'].isin(['fedavg', 'fedprox']).any():     
             df['ARI'] = 0.0
             df['AMI'] = 0.0        
             df['homogeneity'] = 0.0
             df['completeness'] = 0.0
             df['v_measure'] = 0.0
-        
+        elif df['exp_type'].isin(['oracle-centralized']).any():
+            df['ARI'] = 1.0
+            df['AMI'] = 1.0        
+            df['homogeneity'] = 1.0
+            df['completeness'] = 1.0
+            df['v_measure'] = 1.0
+        else : 
+            df['ARI'] = dict_metrics['ARI']
+            df['AMI'] = dict_metrics['AMI']
+            df['homogeneity'] = dict_metrics['hom']
+            df['completeness'] = dict_metrics['cmplt']
+            df['v_measure'] = dict_metrics['vm']
+         
+
         # Reorder columns to place the new columns at the beginning
         cols = ['dataset', 'heterogeneity_class','seed','exp_type','params','skew'] + [col for col in df.columns if col not in ['exp_type','params', 'dataset', 'heterogeneity_class','seed', 'skew']]
         df = df[cols]
@@ -478,30 +485,38 @@ def format_low_values(sheet, df_sorted):
     exclude_columns = {'AMI', 'homogeneity', 'completeness', 'v_measure'}
     
     for row_idx, row in df_sorted.iterrows():
-        excel_row = df_sorted.index.get_loc(row_idx) + 2
-        ari_col_idx = df_sorted.columns.get_loc('ARI') + 1
+        excel_row = df_sorted.index.get_loc(row_idx) + 2  # Excel rows start from 1, and header is row 1
+        ari_col_idx = df_sorted.columns.get_loc('ARI') + 1  # Column index of 'ARI' in Excel
         
-        for col_idx in range(ari_col_idx + 1, len(df_sorted.columns) + 1):
-            col_name = df_sorted.columns[col_idx - 1]
-            if col_name in exclude_columns:
-                continue
-            
-            cell_value = row[col_name]
-            try:
-                extracted_value = extract_number1(str(cell_value))
-            except (ValueError, AttributeError):
-                continue
-            
-            if extracted_value < 50:
-                cell = sheet.cell(row=excel_row, column=col_idx)
-                cell.font = Font(bold=True, color="FF0000")
+        # Get the value of column D (Excel column index 4) for the current row
+        exp_type_value = sheet.cell(row=excel_row, column=4).value
+        
+        # Check if the value of column D is not in the excluded list
+        if exp_type_value not in ['\nfedavg', 'fedavg','fedprox', 'oracle-centralized']:
+            for col_idx in range(ari_col_idx + 1, len(df_sorted.columns) + 1):
+                col_name = df_sorted.columns[col_idx - 1]
+                if col_name in exclude_columns:
+                    continue
+                
+                cell_value = row[col_name]
+                try:
+                    extracted_value = extract_number1(str(cell_value))
+                except (ValueError, AttributeError):
+                    continue
+                
+                # Apply formatting based on extracted_value
+                if extracted_value < 50:
+                    cell = sheet.cell(row=excel_row, column=col_idx)
+                    cell.font = Font(bold=True, color="FF0000")
+                elif extracted_value < 70:
+                    cell = sheet.cell(row=excel_row, column=col_idx)
+                    cell.font = Font(bold=True, color="800080")
 
 # Main program
 def main_excel():
-    with pd.ExcelWriter('granular_results.odf', engine='openpyxl') as writer:
+    with pd.ExcelWriter('granular_results.xlsx', engine='openpyxl') as writer:
         for csv_file in glob.glob('granular_results/*.csv'):
             df = pd.read_csv(csv_file)
-            df.loc[df['exp_type'] == 'oracle-centralized', 'ARI'] = 1
             df = df.drop(columns=['skew'])
 
             if os.path.basename(csv_file) == 'noqs.csv':
@@ -522,11 +537,17 @@ def main_excel():
                 df = df[['dataset', 'heterogeneity_class','seed', 'exp_type', 'params', 'global_accuracy', 'ARI', 
                         'class_1_qt-skew_0.05', 'class_4_qt-skew_0.2', 'class_2_qt-skew_1', 'class_3_qt-skew_2',
                         'AMI', 'homogeneity', 'completeness', 'v_measure']]
-
+                
             exp_type_order = ['fedavg', 'fedprox', 'cfl', 'hcfl', 'fedgroup', 'ifca', 'srfca', 'cornflqs', 'oracle-centralized']
             df['exp_type'] = pd.Categorical(df['exp_type'], categories=exp_type_order, ordered=True)
             df['exp_type'] = df['exp_type'].apply(lambda x: '\n' + x if x == 'fedavg' else x)
+            if df['exp_type'].isin(['\nfedavg','fedavg', 'fedprox']).any():
+                df.loc[df['exp_type'].isin(['fedavg', 'fedprox']), ['ARI', 'AMI', 'homogeneity', 'completeness', 'v_measure']] = 0
+            elif df['exp_type'].isin(['oracle-centralized']).any():
+                df.loc[df['exp_type'].isin(['oracle-centralized']), ['ARI', 'AMI', 'homogeneity', 'completeness', 'v_measure']] = 1
+                
             df_sorted = df.sort_values(['dataset', 'heterogeneity_class', 'seed','exp_type'])
+
             df_sorted.to_excel(writer, sheet_name=sheet_name, index=False)
             
             workbook = writer.book
@@ -552,4 +573,7 @@ if __name__ == "__main__":
     save_histograms(base_path)
     summarize_results(base_path)
     granular_results(base_path)
-    main_excel()
+    try : 
+        main_excel()
+    except :
+        print('Excel generation not working on this system')

@@ -833,68 +833,70 @@ def unbalancing(client: Client, ratio_list: list) -> Client:
     client.data['y'] = y_resampled
     
     return client
+ 
+def dilate_images(x: ndarray, kernel_size: tuple = (3, 3)) -> ndarray:
+    """Perform dilation on a batch of images. Supports both single-channel (n, h, w) and multi-channel (n, h, w, c).
 
-def dilate_images(x : ndarray, kernel_size : tuple = (3, 3)) -> ndarray:
-    
-    """ Perform dilation operation on a batch of images using a given kernel.
-    Make image 'bolder' for features distribution skew setup
-    
-    
     Arguments:
-        x : Input batch of images (3D array with shape (n, height, width)).
+        x : Input batch of images.
         kernel_size : Size of the structuring element/kernel for dilation.
 
     Returns:
-        ndarray Dilation results for all images in the batch.
+        ndarray: Dilation results for all images in the batch.
     """
-    
     import cv2
-    import numpy as np 
-
-    n = x.shape[0]
-
-    dilated_images = np.zeros_like(x, dtype=np.uint8)
-    
-    # Create the kernel for dilation
+    import numpy as np
     kernel = np.ones(kernel_size, np.uint8)
 
-    for i in range(n):
-    
-        dilated_image = cv2.dilate(x[i], kernel, iterations=1)
-    
-        dilated_images[i] = dilated_image
+    if x.ndim == 3:  # Single-channel images (n, h, w)
+        n, h, w = x.shape
+        dilated_images = np.zeros_like(x, dtype=np.uint8)
+        for i in range(n):
+            dilated_images[i] = cv2.dilate(x[i], kernel, iterations=1)
+
+    elif x.ndim == 4:  # Multi-channel images (n, h, w, c)
+        n, h, w, c = x.shape
+        dilated_images = np.zeros_like(x, dtype=np.uint8)
+        for i in range(n):
+            for j in range(c):
+                dilated_images[i, :, :, j] = cv2.dilate(x[i, :, :, j], kernel, iterations=1)
+
+    else:
+        raise ValueError("Input array must have 3 (n, h, w) or 4 (n, h, w, c) dimensions.")
 
     return dilated_images
 
 
-def erode_images(x : ndarray, kernel_size : tuple =(3, 3)) -> ndarray:
-    """
-    Perform erosion operation on a batch of images using a given kernel.
-    Make image 'finner' for features distribution skew setup
+def erode_images(x: ndarray, kernel_size: tuple = (3, 3)) -> ndarray:
+    """Perform erosion on a batch of images. Supports both single-channel (n, h, w) and multi-channel (n, h, w, c).
 
     Arguments:
-        x : Input batch of images (3D array with shape (n, height, width)).
-        kernel_size :  Size of the structuring element/kernel for erosion.
+        x : Input batch of images.
+        kernel_size : Size of the structuring element/kernel for erosion.
 
     Returns:
-        ndarray of Erosion results for all images in the batch.
+        ndarray: Erosion results for all images in the batch.
     """
-    
     import cv2
-    import numpy as np 
-
-    n = x.shape[0]  
-    eroded_images = np.zeros_like(x, dtype=np.uint8)
-
-    # Create the kernel for erosion
+    import numpy as np
+    
     kernel = np.ones(kernel_size, np.uint8)
 
-    # Iterate over each image in the batch
-    for i in range(n):
-        # Perform erosion on the current image
-        eroded_image = cv2.erode(x[i], kernel, iterations=1)
-        # Store the eroded image in the results array
-        eroded_images[i] = eroded_image
+    if x.ndim == 3:  # Single-channel images (n, h, w)
+        n, h, w = x.shape
+        eroded_images = np.zeros_like(x, dtype=np.uint8)
+        for i in range(n):
+            eroded_images[i] = cv2.erode(x[i], kernel, iterations=1)
+
+    elif x.ndim == 4:  # Multi-channel images (n, h, w, c)
+        n, h, w, c = x.shape
+        eroded_images = np.zeros_like(x, dtype=np.uint8)
+        for i in range(n):
+            for j in range(c):
+                eroded_images[i, :, :, j] = cv2.erode(x[i, :, :, j], kernel, iterations=1)
+
+    else:
+        raise ValueError("Input array must have 3 (n, h, w) or 4 (n, h, w, c) dimensions.")
 
     return eroded_images
 

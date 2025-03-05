@@ -303,17 +303,20 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         curr_model = fl_server.model
         # Concept shift on labels have contradictory labels, so they need to be separated.
         if row_exp['params'] == 'clustering':
+            val = True
+        else: 
+            val = False
             
-            for heterogeneity_class in list_heterogeneities:
-                list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
-                train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
-                model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
+        for heterogeneity_class in list_heterogeneities:
+            list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
+            train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
+            model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp, validation= val) 
 
-                global_acc = test_model(model_trained, test_loader) 
-                        
-                for client in list_clients_filtered : 
+            global_acc = test_model(model_trained, test_loader) 
+                    
+            for client in list_clients_filtered : 
 
-                    setattr(client, 'accuracy', global_acc)
+                setattr(client, 'accuracy', global_acc)
         else :
             train_loader, val_loader, test_loader = centralize_data(list_clients,row_exp)
             model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
@@ -504,7 +507,8 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
             
     # Final validation accuracy
     train_loss = torch.stack(train_losses).mean().item()
-    
+    val_acc = test_model(model, val_loader)
+
     weight_update = {}
     for name, param in model.named_parameters():
         if name in server_model.state_dict():

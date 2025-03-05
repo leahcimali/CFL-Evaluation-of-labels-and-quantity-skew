@@ -168,3 +168,4 @@ Archive/*
 server.ts
 granular_results/*
 granular_results.xlsx
+exp_configs.csv

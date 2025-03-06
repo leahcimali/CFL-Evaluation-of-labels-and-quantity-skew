@@ -307,7 +307,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
             for heterogeneity_class in list_heterogeneities:
                 list_clients_filtered = [client for client in list_clients if client.heterogeneity_class == heterogeneity_class]
                 train_loader, val_loader, test_loader = centralize_data(list_clients_filtered,row_exp)
-                model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp) 
+                model_trained, _, _, _ = train_model(curr_model, train_loader, val_loader, row_exp,validation=True) 
 
                 global_acc = test_model(model_trained, test_loader) 
                         

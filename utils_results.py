@@ -563,6 +563,8 @@ def main_excel():
     
     print("Excel file created successfully!")
 
+from src.utils_ranking import main as ranking_main
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
@@ -575,5 +577,6 @@ if __name__ == "__main__":
     granular_results(base_path)
     try : 
         main_excel()
+        ranking_main()
     except :
         print('Excel generation not working on this system')

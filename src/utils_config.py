@@ -52,7 +52,9 @@ def generate_combinations(base_data, params):
     for base, (exp_type, exp_param), seed in itertools.product(base_data, params['exp_params_list'], params['seed_values']):
         epochs = 100 if exp_type == 'oracle-centralized' else params['default_epochs']
         nn_model_used = 'convolutional' if base[0] == 'cifar10' else params['nn_model']
-        combination = base + [exp_type, exp_param, seed, nn_model_used, params['number_of_clients'], params['num_samples_by_label'], params['num_clusters'], epochs, params['rounds']]
+        epochs_used = 5 if base[0] == 'cifar10' else epochs
+        rounds_used = 100 if base[0] == 'cifar10' else params['rounds']
+        combination = base + [exp_type, exp_param, seed, nn_model_used, params['number_of_clients'], params['num_samples_by_label'], params['num_clusters'], epochs_used, rounds_used]
         all_combinations.append(combination)
     return all_combinations
 

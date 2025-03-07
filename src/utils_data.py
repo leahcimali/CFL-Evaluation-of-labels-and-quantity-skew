@@ -231,14 +231,17 @@ def data_transformation(row_exp : dict)-> tuple:
               to the test dataset.
     '''
     if row_exp['dataset'] == 'cifar10': 
+        CIFAR_MEAN = [0.4914, 0.4822, 0.4465]
+        CIFAR_STD = [0.2023, 0.1994, 0.2010]
         train_transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
-            #transforms.RandomRotation(20),
             transforms.RandomCrop(32, padding=4),
+            transforms.ColorJitter(brightness=0.5, hue=0.5),
             transforms.ToTensor(),  # Convert to tensor
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+
         val_transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.ToTensor(),
@@ -307,11 +310,11 @@ def data_preparation(client: Client, row_exp: dict) -> None:
     train_dataset = CustomDataset(x_train, y_train, transform=train_transform)
     val_dataset = CustomDataset(x_val, y_val, transform=val_transform)
     test_dataset = CustomDataset(x_test, y_test, transform=test_transform)
-
+    batch_size = 256 if row_exp['dataset'] == 'cifar10' else 128
     # Create DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-    validation_loader = DataLoader(val_dataset, batch_size=128, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    validation_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     # Store DataLoaders in the client object
     setattr(client, 'data_loader', {'train': train_loader, 'val': validation_loader, 'test': test_loader})
     setattr(client, 'train_test', {'x_train': x_train, 'x_val': x_val, 'x_test': x_test, 'y_train': y_train, 'y_val': y_val, 'y_test': y_test})
@@ -776,11 +779,12 @@ def centralize_data(list_clients: list, row_exp: dict) -> Tuple[DataLoader, Data
     train_dataset = CustomDataset(x_train, y_train, transform=train_transform)
     val_dataset = CustomDataset(x_val, y_val, transform=val_transform)
     test_dataset = CustomDataset(x_test, y_test, transform=test_transform)
-
-    # Create DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False)  
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    # Create DataLoaders with different batch sizes for CIFAR-10
+    batch_size = 256 if row_exp['dataset'] == 'cifar10' else 128
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
     return train_loader, val_loader, test_loader
 

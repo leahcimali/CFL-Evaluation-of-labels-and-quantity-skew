@@ -38,6 +38,7 @@ def create_label_dict(dataset : str, nn_model : str) -> tuple:
 
     Returns:
         label_dict, label_test_dict : Dictionaries of data of the form {'x': [], 'y': []}
+        number_of_unique_labels : Interger. The number of unique labels in the dataset
 
     Raises:
         Error : if the dataset name is unrecognized
@@ -46,9 +47,9 @@ def create_label_dict(dataset : str, nn_model : str) -> tuple:
     import sys
     import numpy as np
     import torchvision
-   
-    import torchvision.transforms as transforms
     
+    import torchvision.transforms as transforms
+    import os
     
 
     if dataset == "fashion-mnist":
@@ -85,13 +86,30 @@ def create_label_dict(dataset : str, nn_model : str) -> tuple:
         x_data, y_data = cifar10.data, cifar10.targets # (samples, H, W, C)
         cifar10_test = torchvision.datasets.CIFAR10("datasets", train = False, download=True)
         x_test, y_test = cifar10_test.data, cifar10_test.targets
-    
+    elif dataset =="pathmnist":
+        import medmnist
+        from medmnist import INFO, Evaluator
+
+        info = INFO[dataset]
+        DataClass = getattr(medmnist, info['python_class'])
+        if os.path.exists('datasets/pathmnist.npz'):
+            download = False
+        else:
+            download = True
+        train = DataClass(root='datasets', split='train', download=download)
+        x_data = np.array([np.array(image) for image, label in train], dtype=np.uint8)
+        y_data = np.array([int(label) for image, label in train], dtype=np.uint8)
+        test = DataClass(root='datasets', split='test', download=download)
+        x_test = np.array([np.array(image) for image, label in test], dtype=np.uint8)
+        y_test = np.array([int(label) for image, label in test], dtype=np.uint8)
+
     else:
         sys.exit("Unrecognized dataset. Please make sure you are using one of the following ['mnist', fashion-mnist', 'kmnist']")    
 
     label_dict = {}
     label_dict_test = {}
-    for label in range(10):
+    number_of_unique_labels = len(np.unique(y_data))
+    for label in range(number_of_unique_labels):
        
         label_indices = np.where(np.array(y_data) == label)[0]   
         label_samples_x = x_data[label_indices]
@@ -100,7 +118,8 @@ def create_label_dict(dataset : str, nn_model : str) -> tuple:
         label_samples_x_test = x_test[label_indices_test]
         label_dict_test[label] = label_samples_x_test
         
-    return label_dict, label_dict_test
+    return label_dict, label_dict_test, number_of_unique_labels
+ 
 
 
 def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : str, nn_model : str) -> dict:
@@ -119,7 +138,7 @@ def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : st
     
     import numpy as np 
 
-    label_dict,label_dict_test = create_label_dict(dataset, nn_model)
+    label_dict,label_dict_test, number_of_unique_labels = create_label_dict(dataset, nn_model)
     
 
     clients_dictionary = {}
@@ -129,7 +148,7 @@ def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : st
         
         clients_dictionary[client] = {'train': {}, 'test': {}}    
         
-        for label in range(10):
+        for label in range(number_of_unique_labels):
             if num_samples_by_label > (len(label_dict[label])//num_clients):
                 
                 num_samples_by_label = len(label_dict[label])//num_clients
@@ -143,13 +162,13 @@ def get_clients_data(num_clients : int, num_samples_by_label : int, dataset : st
     
         client_dataset[client] = {}    
     
-        client_dataset[client]['x'] = np.concatenate([clients_dictionary[client]['train'][label] for label in range(10)], axis=0)
+        client_dataset[client]['x'] = np.concatenate([clients_dictionary[client]['train'][label] for label in range(number_of_unique_labels)], axis=0)
     
-        client_dataset[client]['y'] = np.concatenate([[label]*len(clients_dictionary[client]['train'][label]) for label in range(10)], axis=0)
+        client_dataset[client]['y'] = np.concatenate([[label]*len(clients_dictionary[client]['train'][label]) for label in range(number_of_unique_labels)], axis=0)
         
-        client_dataset[client]['x_test'] = np.concatenate([clients_dictionary[client]['test'][label] for label in range(10)], axis=0)
+        client_dataset[client]['x_test'] = np.concatenate([clients_dictionary[client]['test'][label] for label in range(number_of_unique_labels)], axis=0)
         
-        client_dataset[client]['y_test'] = np.concatenate([[label]*len(clients_dictionary[client]['test'][label]) for label in range(10)], axis=0)
+        client_dataset[client]['y_test'] = np.concatenate([[label]*len(clients_dictionary[client]['test'][label]) for label in range(number_of_unique_labels)], axis=0)
     
     return client_dataset
 
@@ -230,14 +249,14 @@ def data_transformation(row_exp : dict)-> tuple:
             - test_transform (transforms.Compose): Transformations applied 
               to the test dataset.
     '''
-    if row_exp['dataset'] == 'cifar10': 
+    if row_exp['dataset'] == 'cifar10' : 
         CIFAR_MEAN = [0.4914, 0.4822, 0.4465]
         CIFAR_STD = [0.2023, 0.1994, 0.2010]
         train_transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, padding=4),
-            transforms.ColorJitter(brightness=0.5, hue=0.5),
+            #transforms.ColorJitter(brightness=0.5, hue=0.5),
             transforms.ToTensor(),  # Convert to tensor
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
@@ -296,7 +315,8 @@ def data_preparation(client: Client, row_exp: dict) -> None:
     
     # Split into train, validation, and test sets
     x_train, y_train = client.data['x'], client.data['y']
-    
+    print(x_train.shape)
+    print(type(x_train))
     #Spit test set in validation and test
     
     x_val, x_test, y_val, y_test = train_test_split(
@@ -377,7 +397,7 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
     torch.manual_seed(row_exp['seed'])
 
-    imgs_params = {'mnist': (28,1) , 'fashion-mnist': (28,1), 'kmnist': (28,1), 'cifar10': (32,3)}
+    imgs_params = {'mnist': (28,1) , 'fashion-mnist': (28,1), 'kmnist': (28,1), 'pathmnist':(28,3),'cifar10': (32,3)}
 
     if row_exp['nn_model'] == "linear":
         
@@ -463,6 +483,17 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
     # Quantity skew
     elif row_exp['heterogeneity_type'] == "quantity-skew": #less images altogether for certain clients
         list_clients = apply_quantity_skew(list_clients, row_exp, dict_params['skews']) 
+    elif row_exp['heterogeneity_type'] == "None":
+        if row_exp['skew'] == "quantity-skew-type-1":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 1) 
+        elif row_exp['skew'] == "quantity-skew-type-2":
+            list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
+        elif row_exp['skew'] == "label-skew":
+            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
+                                          dict_params['ratios'])
+        for client in list_clients:
+            data_preparation(client, row_exp)
 
     return list_clients
 

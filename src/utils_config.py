@@ -4,7 +4,7 @@ import click
 
 def get_base_params():
     return {
-        'datasets': ['mnist', 'fashion-mnist', 'kmnist', 'cifar10'],
+        'datasets': ['mnist', 'fashion-mnist', 'kmnist', 'cifar10','pathmnist','octmnist','tissuemnist'],
         'heterogeneity_classes': ['concept-shift-on-features', 'concept-shift-on-labels', 'features-distribution-skew'],
         'skews': ['None', 'quantity-skew-type-1', 'quantity-skew-type-2'],
         'exp_params_list': [
@@ -51,10 +51,13 @@ def generate_combinations(base_data, params):
     all_combinations = []
     for base, (exp_type, exp_param), seed in itertools.product(base_data, params['exp_params_list'], params['seed_values']):
         epochs = 100 if exp_type == 'oracle-centralized' else params['default_epochs']
-        nn_model_used = 'convolutional' if base[0] == 'cifar10' else params['nn_model']
-        epochs_used = 5 if base[0] == 'cifar10' else epochs
-        rounds_used = 100 if base[0] == 'cifar10' else params['rounds']
-        combination = base + [exp_type, exp_param, seed, nn_model_used, params['number_of_clients'], params['num_samples_by_label'], params['num_clusters'], epochs_used, rounds_used]
+        nn_model_used = 'convolutional' if base[0] in ['cifar10','pathmnist','octmnist','tissuemnist'] else params['nn_model']
+        epochs_used = 5 if base[0]in ['cifar10','pathmnist','octmnist','tissuemnist'] else epochs
+        rounds_used = 100 if base[0] in ['cifar10','pathmnist','octmnist','tissuemnist'] else params['rounds']
+        num_samples_by_labels_used = 100 if base[0] in ['pathmnist', 'octmnist'] else \
+                         200 if base[0] == 'tissuemnist' else params['num_samples_by_label']
+        combination = base + [exp_type, exp_param, seed, nn_model_used, 
+                      params['number_of_clients'], num_samples_by_labels_used, params['num_clusters'], epochs_used, rounds_used]
         all_combinations.append(combination)
     return all_combinations
 

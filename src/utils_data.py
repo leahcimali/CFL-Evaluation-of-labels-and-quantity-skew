@@ -86,20 +86,34 @@ def create_label_dict(dataset : str, nn_model : str) -> tuple:
         x_data, y_data = cifar10.data, cifar10.targets # (samples, H, W, C)
         cifar10_test = torchvision.datasets.CIFAR10("datasets", train = False, download=True)
         x_test, y_test = cifar10_test.data, cifar10_test.targets
-    elif dataset =="pathmnist":
+    elif dataset in ['pathmnist','octmnist','tissuemnist']:
         import medmnist
         from medmnist import INFO, Evaluator
+        '''
+        Possible dataset values from medmnist:
+        'pathmnist', 'chestmnist', 'dermamnist', 'octmnist', 'pneumoniamnist', 
+        'retinamnist', 'breastmnist', 'bloodmnist', 'tissuemnist', 'organamnist', 
+        'organcmnist', 'organmnist3d', 'nodulemnist3d', 'adrenalmnist3d', 'fracturemnist3d', 
+        'vesselmnist3d', 'synapsemnist3d'
 
+        We have chosen the  following datasets for the experiment because of high number of samples 
+        which is better for creating quantity skew:
+        
+        2D datasets of interest - Data Modality 	Tasks (# Classes/Labels) 	# Samples 	# Training / Validation / Test
+        pathmnist 	Colon Pathology 	Multi-Class (9) 	107,180 	89,996 / 10,004 / 7,180
+        octmnist 	Retinal OCT 	Multi-Class (4) 	109,309 	97,477 / 10,832 / 1,000
+        tissuemnist 	Kidney Cortex Microscope 	Multi-Class (8) 	236,386 	165,466 / 23,640 / 47,280
+        '''
         info = INFO[dataset]
         DataClass = getattr(medmnist, info['python_class'])
-        if os.path.exists('datasets/pathmnist.npz'):
+        if os.path.exists('datasets/{}.npz'.format(dataset)) :
             download = False
         else:
             download = True
         train = DataClass(root='datasets', split='train', download=download)
         x_data = np.array([np.array(image) for image, label in train], dtype=np.uint8)
         y_data = np.array([int(label) for image, label in train], dtype=np.uint8)
-        test = DataClass(root='datasets', split='test', download=download)
+        test = DataClass(root='datasets', split='val', download=download)
         x_test = np.array([np.array(image) for image, label in test], dtype=np.uint8)
         y_test = np.array([int(label) for image, label in test], dtype=np.uint8)
 
@@ -397,7 +411,8 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
     torch.manual_seed(row_exp['seed'])
 
-    imgs_params = {'mnist': (28,1) , 'fashion-mnist': (28,1), 'kmnist': (28,1), 'pathmnist':(28,3),'cifar10': (32,3)}
+    imgs_params = {'mnist': (28,1) , 'fashion-mnist': (28,1), 'kmnist': (28,1), 'pathmnist':(28,3)
+                   , 'tissuemnist':(28,1),'octmnist':(28,1), 'cifar10': (32,3)}
 
     if row_exp['nn_model'] == "linear":
         
@@ -447,7 +462,12 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
         # if skew as value none or other value will not apply skewness
-        list_clients = apply_rotation(list_clients, row_exp)
+        if row_exp['dataset'] == "pathmnist":
+            list_clients = apply_channel_invertion(list_clients, row_exp)
+        elif row_exp['dataset'] in ['tissuemnist','octmnist']:
+            list_clients = apply_invert_greyscale_and_zoom(list_clients, row_exp)
+        else :
+            list_clients = apply_rotation(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
             dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
@@ -574,6 +594,101 @@ def apply_rotation(list_clients : list, row_exp : dict) -> list:
 
     return list_clients
 
+def apply_invert_greyscale_and_zoom(list_clients : list, row_exp : dict) -> list:
+
+    """ Utility function to apply normal, greyscale inversion, normal with zoom and greyscale inversion with zoom to 1/4 of Clients 
+
+    Arguments:
+        list_clients : List of Client Objects with specific heterogeneity_class 
+        row_exp : The current experiment's global parameters
+    
+    Returns:
+        Updated list of clients
+    """
+    
+    number_of_client_per_transformation = row_exp['num_clients'] // 4
+
+    for i in range(0,4):
+        
+        start_index = i * number_of_client_per_transformation
+        end_index = (i + 1) * number_of_client_per_transformation
+
+        list_clients_transformed = list_clients[start_index:end_index]
+
+        for client in list_clients_transformed:
+            if i == 0: 
+                client.heterogeneity_class = 'normal'
+            elif i == 1:
+                client.data['x'] = 255 - client.data['x']  # Invert greyscale
+                client.data['x_test'] = 255 - client.data['x_test']  # Invert greyscale for test data
+                client.heterogeneity_class = 'inverted_greyscale'
+            elif i == 2:
+                h, w = client.data['x'].shape[1:3]
+                client.data['x'] = client.data['x'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom
+                client.data['x_test'] = client.data['x_test'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom for test data
+                client.heterogeneity_class = 'zoom'
+            elif i == 3:
+                h, w = client.data['x'].shape[1:3]
+                client.data['x'] = 255 - client.data['x']  # Invert greyscale
+                client.data['x'] = client.data['x'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom
+                client.data['x_test'] = 255 - client.data['x_test']  # Invert greyscale for test data
+                client.data['x_test'] = client.data['x_test'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom for test data
+                client.heterogeneity_class = 'inverted_greyscale_zoom'
+            
+            data_preparation(client, row_exp)
+
+        list_clients[start_index:end_index] = list_clients_transformed
+
+    list_clients  = list_clients[:end_index]
+
+    return list_clients
+
+def apply_channel_invertion(list_clients: list, row_exp: dict) -> list:
+    """ Utility function to apply normal, and 3 transformations of 2 channels swapping to 1/4 of Clients 
+
+    Arguments:
+        list_clients : List of Client Objects with specific heterogeneity_class 
+        row_exp : The current experiment's global parameters
+    
+    Returns:
+        Updated list of clients
+    """
+    
+    number_of_client_per_transformation = row_exp['num_clients'] // 4
+
+    for i in range(0, 4):
+        
+        start_index = i * number_of_client_per_transformation
+        end_index = (i + 1) * number_of_client_per_transformation
+
+        list_clients_transformed = list_clients[start_index:end_index]
+
+        for client in list_clients_transformed:
+            if i == 0: 
+                client.heterogeneity_class = 'normal'
+            elif i == 1:
+                if client.data['x'].shape[-1] == 3:  # Check if the image has 3 channels
+                    client.data['x'] = client.data['x'][:, :, :, [1, 0, 2]]  # Swap channel 0 and 1
+                    client.data['x_test'] = client.data['x_test'][:, :, :, [1, 0, 2]]  # Swap channel 0 and 1 for test data
+                    client.heterogeneity_class = 'swapped_channels_0_1'
+            elif i == 2:
+                if client.data['x'].shape[-1] == 3:  # Check if the image has 3 channels
+                    client.data['x'] = client.data['x'][:, :, :, [2, 1, 0]]  # Swap channel 0 and 2
+                    client.data['x_test'] = client.data['x_test'][:, :, :, [2, 1, 0]]  # Swap channel 0 and 2 for test data
+                    client.heterogeneity_class = 'swapped_channels_0_2'
+            elif i == 3:
+                if client.data['x'].shape[-1] == 3:  # Check if the image has 3 channels
+                    client.data['x'] = client.data['x'][:, :, :, [0, 2, 1]]  # Swap channel 1 and 2
+                    client.data['x_test'] = client.data['x_test'][:, :, :, [0, 2, 1]]  # Swap channel 1 and 2 for test data
+                    client.heterogeneity_class = 'swapped_channels_1_2'
+            
+            data_preparation(client, row_exp)
+
+        list_clients[start_index:end_index] = list_clients_transformed
+
+    list_clients = list_clients[:end_index]
+
+    return list_clients
 
 def apply_labels_skew(list_clients : list, row_exp : dict, list_ratios : list) -> list:
     """ 

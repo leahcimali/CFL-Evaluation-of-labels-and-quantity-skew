@@ -41,6 +41,12 @@ dataset
         fashion-mnist : FASHION-MNIST dataset.
 
         cifar10: CIFAR-10 dataset.
+        
+        pathmnist : pathmnist dataset from medmnist. 
+
+        octmnist : octmnist dataset from medmnist.
+
+        tissuemnist: tissue mnist dataset from medmnist. 
 
 nn_model
 

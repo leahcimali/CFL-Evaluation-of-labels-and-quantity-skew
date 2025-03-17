@@ -316,7 +316,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
     list_heterogeneities = list(dict.fromkeys([client.heterogeneity_class for client in list_clients]))
     
     torch.manual_seed(row_exp['seed'])
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
     curr_model = fl_server.model
 

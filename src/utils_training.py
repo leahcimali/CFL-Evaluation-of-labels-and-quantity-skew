@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.models import ImageClassificationBase
 from src.fedclass import Server
+from src.utils_fed import store_client_accuracies 
 
     
         
@@ -44,7 +45,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     fedavg(fl_server, selected_clients,ponderated= ponderated)
     return
 
-def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, alpha, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True)-> pd.DataFrame:
+def run_fedgroup(fl_server : Server, list_clients : list, row_exp : dict, alpha, algorithm : str = 'kmeans', clustering_metric : str ='euclidean',ponderated :bool = True)-> pd.DataFrame:
     """ FedGroup for one communication round
     Credit -> Inspired by https://github.com/morningD/FlexCFL
     
@@ -60,6 +61,7 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, alpha, alg
      Returns:
 
         df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
     """
     import random
     from src.utils_fed import fedavg, send_clusters_models_to_clients,client_migration
@@ -95,8 +97,8 @@ def FedGroup(fl_server : Server, list_clients : list, row_exp : dict, alpha, alg
         setattr(client, 'accuracy', acc)
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
-
-    return df_results 
+    df_tracking = store_client_accuracies(list_clients)
+    return df_results, df_tracking
 
     
 def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict, ponderated = True) -> pd.DataFrame:
@@ -113,6 +115,8 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
     Returns:
 
         df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
+
     """
 
     from src.utils_fed import k_means_clustering, Agglomerative_Clustering
@@ -153,7 +157,8 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
 
-    return df_results 
+    df_tracking = store_client_accuracies(list_clients)
+    return df_results, df_tracking
 
 
 def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponderated : bool = True) -> pd.DataFrame:
@@ -167,6 +172,11 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
         fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
+    Returns:
+    
+        df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
+
     """
 
     from src.utils_fed import  set_client_cluster, fedavg
@@ -195,7 +205,9 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
         list_clients_dict.append(client_dict)
         
     df_results = pd.DataFrame.from_records(list_clients_dict)
-    return df_results
+    df_tracking = store_client_accuracies(list_clients)
+    return df_results, df_tracking
+
 
 def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
     
@@ -213,6 +225,8 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     Returns:
 
         df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
+
     """
 
     from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, set_client_cluster
@@ -273,7 +287,9 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
 
-    return df_results 
+    df_tracking = store_client_accuracies(list_clients)
+    return df_results, df_tracking
+
 
 def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
 
@@ -284,6 +300,11 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         fl_server : Type of Server model needed    
         list_clients : A list of Client Objects used as nodes in the FL protocol  
         row_exp : The current experiment's global parameters
+    Returns:
+
+        df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
+
     """
 
     import pandas as pd 
@@ -352,7 +373,9 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
     
-    return df_results
+    df_tracking = store_client_accuracies(list_clients)
+    return df_results, df_tracking
+
 
 
 def train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated = True, fedprox_mu : float = 0):
@@ -571,7 +594,7 @@ import copy
 
 from src.metrics import cross_cluster_distance_client_to_cluster, cross_cluster_distance_cluster_to_cluster, compute_distance_matrix
 
-def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
+def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
   """
     Perform the SRFCA (Self-Refining Federated Clustering Algorithm) for federated learning.
 
@@ -581,7 +604,10 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
         row_exp (dict): A dictionary containing experiment parameters including number of federated rounds and clustering settings.
 
     Returns:
-        pd.DataFrame: A DataFrame containing the results (such as accuracy) for each client after federated rounds.
+
+        df_results : dataframe with the experiment results
+        df_tracking : dataframe with the experiment tracking
+
   """
   import ast
   from src.utils_training import test_model
@@ -641,8 +667,9 @@ def srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFra
         setattr(client, 'accuracy', acc)
 
   df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
+  df_tracking = store_client_accuracies(list_clients)
+  return df_results, df_tracking
 
-  return df_results 
 
 def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, lambda_threshold : float,connection_size_t : int,refine_step = False)-> None:
   """

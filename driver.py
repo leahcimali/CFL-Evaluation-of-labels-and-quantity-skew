@@ -1,6 +1,9 @@
 import os
 import traceback
 
+from logging import getLogger
+from src.utils_logging import setup_logging, cprint
+
 # Set the environment variable for deterministic behavior with CuBLAS (Give reproductibility with CUDA) 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
@@ -38,7 +41,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
     output_name =  row_exp.to_string(header=False, index=False, name=False).replace(' ', "").replace('\n','_')
     
     hash_outputname = get_uid(output_name)
-
+    setup_logging(hash_outputname)
     pathlist = Path("results").rglob('*.json')
 
     for file_name in pathlist:
@@ -74,6 +77,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
             output_name =  row_exp.to_string(header=False, index=False, name=False).replace(' ', "").replace('\n','_')
     
             hash_outputname = get_uid(output_name)
+            setup_logging(hash_outputname)
 
             pathlist = Path("results").rglob('*.json')
 
@@ -87,7 +91,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
 
 def launch_experiment(fl_server, list_clients, row_exp, output_name, save_results = True):
         
-        from src.utils_training import run_cfl_IFCA, run_cfl_server_side, run_cfl_cornflqs, FedGroup,run_benchmark, srfca
+        from src.utils_training import run_cfl_IFCA, run_cfl_server_side, run_cfl_cornflqs, run_fedgroup,run_benchmark, run_srfca
         from src.utils_data import setup_experiment
         str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
 
@@ -95,28 +99,28 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
 
             print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 
-            df_results = run_benchmark(fl_server, list_clients, row_exp)
+            df_results, df_tracking =run_benchmark(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] =='srfca': 
-            df_results = srfca(fl_server,list_clients,row_exp)
+            df_results, df_tracking =run_srfca(fl_server,list_clients,row_exp)
         
         elif row_exp['exp_type'] == "oracle-cfl":
-            df_results = run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='oracle-cfl',clustering_metric='none')
+            df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='oracle-cfl',clustering_metric='none')
         
         elif row_exp['exp_type'] == "cornflqs":
             print(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
             # Use agglomerative HC + euclidean distance and ward linkage
-            df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
+            df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
             
             '''
             if row_exp['params']== 'edc':
-                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
+                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
             elif row_exp['params']== 'euclidean':
-                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
+                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
             elif row_exp['params']== 'madc':
-                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='madc')
+                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='madc')
             elif row_exp['params']== 'kmeans':
-                df_results = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='euclidean')
+                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='euclidean')
             '''
 
         elif row_exp['exp_type'] == "ifca":
@@ -131,27 +135,27 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                     df = run_cfl_IFCA(fl_server, list_clients, row_exp)
                     if df['validation'].mean() > best_accuracy:
                         best_accuracy = df['validation'].mean()
-                        df_results = df
+                        df_results, df_tracking =df
                     
             elif isinstance(row_exp['params'], int)  :
                 fl_server, list_clients = setup_experiment(row_exp)
-                df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
+                df_results, df_tracking =run_cfl_IFCA(fl_server, list_clients, row_exp)
 
             else : 
                 print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
-                df_results = run_cfl_IFCA(fl_server, list_clients, row_exp)
+                df_results, df_tracking =run_cfl_IFCA(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == "cfl":
 
             print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
             
             print('Using Kmeans Clustering!')
-            df_results = run_cfl_server_side(fl_server, list_clients, row_exp)
+            df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == 'hcfl': 
             print('Using Agglomerative Clustering!')
             
-            df_results = run_cfl_server_side(fl_server, list_clients, row_exp)
+            df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == "fedgroup":
             #iterative server-side
@@ -160,7 +164,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             if row_exp['params'] == 'madc':
                 print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
             
-                df_results = FedGroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'agglomerative', clustering_metric = 'madc')
+                df_results, df_tracking =run_fedgroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'agglomerative', clustering_metric = 'madc')
             
             else :
                 
@@ -168,7 +172,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                 str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
                 print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
 
-                df_results = FedGroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'kmeans', clustering_metric = 'edc')
+                df_results, df_tracking =run_fedgroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'kmeans', clustering_metric = 'edc')
         else:
             
             str_exp_type = row_exp['exp_type']
@@ -176,8 +180,12 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             raise Exception(f"Unrecognized experiement type {str_exp_type}. Please check config file and try again.")
         
         if save_results : 
+            # Ensure the results and tracking directories exist
+            os.makedirs("results", exist_ok=True)
+            os.makedirs("tracking", exist_ok=True)
 
             df_results.to_csv("results/" + output_name + ".csv")
+            df_tracking.to_csv("tracking/" + output_name + "_tracking.csv")
 
         return
 

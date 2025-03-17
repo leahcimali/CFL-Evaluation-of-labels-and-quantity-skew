@@ -468,3 +468,30 @@ def set_client_cluster(fl_server : Server, list_clients : list, row_exp : dict) 
     
         client.cluster_id = index_of_min_loss
     
+def store_client_accuracies(client_list):
+        """
+        Stores client round-wise accuracies into a DataFrame with clients as rows.
+        
+        Args:
+            client_list (list): List of client objects, each having `id` and `round_acc` attributes.
+            experiment_id (str): Unique experiment identifier.
+        
+        Returns:
+            df (pd.DataFrame): DataFrame containing round-wise accuracy per client.
+        """
+        # Ensure all clients have the same number of rounds
+        num_rounds = len(client_list[0].round_acc)
+        
+        # Create dictionary where key = column name, value = list of values
+        data = {
+            "client_id": [client.id for client in client_list]  # First column = client IDs
+        }
+        
+        # Add round-wise accuracies
+        for r in range(num_rounds):
+            data[f"round_{r}"] = [client.round_acc[r] for client in client_list]  # One column per round
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(data)
+        
+        return df

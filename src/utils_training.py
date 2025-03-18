@@ -454,6 +454,8 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
 
     # Move the model to the device
     server_model = copy.deepcopy(model).to(device)
+    # store the last federated model validation set accuracy for tracking evolution
+    tracking = test_model(model, val_loader)
 
     # Optimizer setup
     history = []
@@ -520,10 +522,6 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
 
         else : 
             best_model = model    
-    
-    if validation == False :
-        val_acc = test_model(model, val_loader)
-
             
     # Final validation accuracy
     train_loss = torch.stack(train_losses).mean().item()
@@ -532,7 +530,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
     for name, param in model.named_parameters():
         if name in server_model.state_dict():
             weight_update[name] = param.data - server_model.state_dict()[name]
-    return best_model, train_loss, val_acc, weight_update
+    return best_model, train_loss, tracking, weight_update
     
 
 def test_model(model: nn.Module, test_loader: DataLoader) -> float:

@@ -447,8 +447,8 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         mu : Regularization coefficient for FedProx (default: 0.0, ignored if 0)
         validation : Use the validation set to find the best
     Returns:
-        (model, history, final_val_acc, weight_update) : Trained model, final train loss of the trained model, 
-        validation set accuracy of the trained model, and the weights update of the model
+        (model, history, tracking, weight_update) : Trained model, final train loss of the trained model, 
+        local validation set accuracy of the last federated model, and the weights update of the model
     """
     import copy
 

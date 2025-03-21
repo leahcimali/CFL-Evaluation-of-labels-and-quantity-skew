@@ -132,10 +132,10 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                     fl_server, list_clients = setup_experiment(row_exp)
                     str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
                     print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
-                    df = run_cfl_IFCA(fl_server, list_clients, row_exp)
+                    df, df_track = run_cfl_IFCA(fl_server, list_clients, row_exp)
                     if df['validation'].mean() > best_accuracy:
                         best_accuracy = df['validation'].mean()
-                        df_results, df_tracking =df
+                        df_results, df_tracking = df, df_track
                     
             elif isinstance(row_exp['params'], int)  :
                 fl_server, list_clients = setup_experiment(row_exp)

@@ -97,7 +97,7 @@ def run_fedgroup(fl_server : Server, list_clients : list, row_exp : dict, alpha,
         setattr(client, 'accuracy', acc)
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
-    df_tracking = store_client_accuracies(list_clients)
+    df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
     
@@ -157,7 +157,7 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
 
-    df_tracking = store_client_accuracies(list_clients)
+    df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
 
@@ -205,11 +205,11 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
         list_clients_dict.append(client_dict)
         
     df_results = pd.DataFrame.from_records(list_clients_dict)
-    df_tracking = store_client_accuracies(list_clients)
+    df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
 
-def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False) -> pd.DataFrame:
+def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False, auto = False) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -221,6 +221,8 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         row_exp : The current experiment's global parameters
         algorithm : Clustering algorithm used on server can be kmeans or agglomerative clustering
         clustering_metric : euclidean, cosine or MADC
+        ponderated : If ponderated fedavg is used during cold start
+        auto : The number of refine rounds is automatically calculated based on clustering stability between client and server
 
     Returns:
 
@@ -234,14 +236,9 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     import torch 
     import ast
     torch.manual_seed(row_exp['seed'])
-    try:
-        cold_rounds, server_client_rounds, client_only_rounds = map(int, row_exp['params'].split('-'))
-    except Exception as e:
-        print('Error in params:', e, '!')
-        print('Using defaults parameters')
-        cold_rounds, server_client_rounds, client_only_rounds = 1, row_exp['rounds'] // 2, row_exp['rounds'] // 2
-            
-    row_exp['rounds'] = cold_rounds
+    communication_rounds = row_exp['rounds']
+    # Cold start clustering with unponderated fedavg for 1 communication round
+    row_exp['rounds'] = 1
     # Cold start
     # Train the federated model with unponderated fedavg for n = cold_rounds rounds
     fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=False)
@@ -252,29 +249,17 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         print("Training client ", client.id)
         client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
-    # Server/Client aggrement rounds
-    for round in range(server_client_rounds):
-        if round == 0 :
-            model_update = True
-        else :
-            model_update = False
-        
-        if algorithm == 'agglomerative' :
-            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=model_update)
-
-        elif algorithm == 'kmeans': 
-            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],clustering_metric,model_update)
-        fedavg(fl_server, list_clients)
-        
-        set_client_cluster(fl_server, list_clients, row_exp)
-        for client in list_clients:
-            print("Training client ", client.id)
-            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-            client.round_acc.append(acc)
+    
+    row_exp['rounds'] = communication_rounds
+    # Perform clustering optimal research between client and server 
+    client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
     # Client only rounds
     for round in range(client_only_rounds):
         fedavg(fl_server, list_clients) # Do fedavg by cluster
-        set_client_cluster(fl_server, list_clients, row_exp)
+        #Continue client side clustering only if server and client never reached an agreement
+        if client_only_rounds == row_exp['rounds']//2 : 
+            set_client_cluster(fl_server, list_clients, row_exp)
+            
         for client in list_clients:
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
@@ -287,9 +272,66 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
 
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
 
-    df_tracking = store_client_accuracies(list_clients)
+    df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
+def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: list, row_exp: dict, algorithm: str = 'kmeans', clustering_metric: str = 'euclidean', match: int = 100, auto = False) -> int:
+    """
+    Perform clustering on clients and evaluate the optimal number of rounds for client-side clustering.
+    This function performs clustering on the clients using the specified algorithm and metric, 
+    then evaluates the optimal number of rounds for client-side clustering based on the match percentage 
+    of cluster IDs between the server and clients.
+    Args:
+        fl_server (Server): The federated learning server object.
+        list_clients (list): A list of client objects participating in the federated learning.
+        row_exp (dict): A dictionary containing experimental parameters such as 'rounds', 'num_clusters', 'seed', etc.
+        algorithm (str, optional): The clustering algorithm to use ('kmeans' or 'agglomerative'). Defaults to 'kmeans'.
+        clustering_metric (str, optional): The metric to use for clustering ('euclidean', etc.). Defaults to 'euclidean'.
+        match (int, optional): The percentage threshold for matching cluster IDs to stop clustering. Defaults to 100.
+        auto (bool, optional): Automatically determine the number of rounds for aggreament clustering. Defaults to False.
+    Returns:
+        Number of rounds for client-side only clustering.
+    """
+    from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, set_client_cluster
+
+    
+    for round in range(row_exp['rounds']//2):
+        if round == 0 :
+            model_update = True
+        else :
+            model_update = False
+        
+        if algorithm == 'agglomerative' :
+            Agglomerative_Clustering(fl_server,list_clients, row_exp['num_clusters'], clustering_metric, row_exp['seed'],model_update=model_update)
+
+        elif algorithm == 'kmeans': 
+            k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],clustering_metric,model_update)
+        
+        # Store the server-side cluster IDs for comparison
+        if auto : 
+            server_side_client_cluster_id = [client.cluster_id for client in list_clients] 
+        
+        fedavg(fl_server, list_clients)
+        
+        set_client_cluster(fl_server, list_clients, row_exp)
+        # store the client-side cluster IDs for comparison
+        if auto :
+            client_side_client_cluster_id = [client.cluster_id for client in list_clients]
+        for client in list_clients:
+            print("Training client ", client.id)
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.round_acc.append(acc)
+
+        # Calculate the percentage of matching cluster IDs
+        matches = sum(1 for a, b in zip(server_side_client_cluster_id, client_side_client_cluster_id) if a == b)
+        match_percentage = (matches / len(server_side_client_cluster_id)) * 100
+        print(f"Match percentage: {match_percentage}%")
+        if match_percentage >= match :
+            client_side_clustering_rounds = row_exp['rounds'] - round
+            break
+    client_side_clustering_rounds = row_exp['rounds'] // 2
+
+    return client_side_clustering_rounds
 
 def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd.DataFrame:
 
@@ -373,7 +415,7 @@ def run_benchmark(fl_server : Server, list_clients : list, row_exp : dict) -> pd
         
     df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
     
-    df_tracking = store_client_accuracies(list_clients)
+    df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
 
@@ -665,7 +707,7 @@ def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.Dat
         setattr(client, 'accuracy', acc)
 
   df_results = pd.DataFrame.from_records([c.to_dict() for c in list_clients])
-  df_tracking = store_client_accuracies(list_clients)
+  df_tracking = store_client_accuracies(list_clients,row_exp)
   return df_results, df_tracking
 
 

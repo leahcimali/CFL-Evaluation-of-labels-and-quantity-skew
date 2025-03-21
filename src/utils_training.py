@@ -209,7 +209,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     return df_results, df_tracking
 
 
-def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'kmeans', clustering_metric : str ='euclidean', ponderated : bool = False, auto = False) -> pd.DataFrame:
+def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'agglomerative', ponderated : bool = False, auto = True) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -237,6 +237,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     import ast
     torch.manual_seed(row_exp['seed'])
     communication_rounds = row_exp['rounds']
+    clustering_metric = str(row_exp['params'])
     # Cold start clustering with unponderated fedavg for 1 communication round
     row_exp['rounds'] = 1
     # Cold start
@@ -251,8 +252,11 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
         client.round_acc.append(acc)
     
     row_exp['rounds'] = communication_rounds
-    # Perform clustering optimal research between client and server 
-    client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
+    # Perform clustering optimal research between client and server
+    try :
+        client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
+    except : 
+        client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm)
     # Client only rounds
     for round in range(client_only_rounds):
         fedavg(fl_server, list_clients) # Do fedavg by cluster
@@ -275,7 +279,7 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     df_tracking = store_client_accuracies(list_clients,row_exp)
     return df_results, df_tracking
 
-def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: list, row_exp: dict, algorithm: str = 'kmeans', clustering_metric: str = 'euclidean', match: int = 100, auto = False) -> int:
+def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: list, row_exp: dict, algorithm: str = 'agglomerative', clustering_metric: str = 'euclidean', match: int = 100) -> int:
     """
     Perform clustering on clients and evaluate the optimal number of rounds for client-side clustering.
     This function performs clustering on the clients using the specified algorithm and metric, 
@@ -308,15 +312,13 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
             k_means_clustering(fl_server,list_clients, row_exp['num_clusters'], row_exp['seed'],clustering_metric,model_update)
         
         # Store the server-side cluster IDs for comparison
-        if auto : 
-            server_side_client_cluster_id = [client.cluster_id for client in list_clients] 
+        server_side_client_cluster_id = [client.cluster_id for client in list_clients] 
         
         fedavg(fl_server, list_clients)
         
         set_client_cluster(fl_server, list_clients, row_exp)
         # store the client-side cluster IDs for comparison
-        if auto :
-            client_side_client_cluster_id = [client.cluster_id for client in list_clients]
+        client_side_client_cluster_id = [client.cluster_id for client in list_clients]
         for client in list_clients:
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
@@ -329,7 +331,8 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
         if match_percentage >= match :
             client_side_clustering_rounds = row_exp['rounds'] - round
             break
-    client_side_clustering_rounds = row_exp['rounds'] // 2
+    if round == row_exp['rounds'] // 2 -1 :
+        client_side_clustering_rounds = row_exp['rounds'] // 2
 
     return client_side_clustering_rounds
 

@@ -110,7 +110,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
         elif row_exp['exp_type'] == "cornflqs":
             print(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
             # Use agglomerative HC + euclidean distance and ward linkage
-            df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
+            df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp)
             
             '''
             if row_exp['params']== 'edc':

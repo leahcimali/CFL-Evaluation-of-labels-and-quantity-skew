@@ -258,17 +258,26 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     except : 
         client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm)
     # Client only rounds
+    #Stop parameter for client side clustering if the clustering is the same on two consecutive rounds 
+    stop = False
+    
     for round in range(client_only_rounds):
         fedavg(fl_server, list_clients) # Do fedavg by cluster
         #Continue client side clustering only if server and client never reached an agreement
-        if client_only_rounds == row_exp['rounds']//2 : 
-            set_client_cluster(fl_server, list_clients, row_exp)
-            
+        if stop == False :
+            if client_only_rounds == row_exp['rounds']//2 : 
+                old_clustering = [client.cluster_id for client in list_clients]
+                set_client_cluster(fl_server, list_clients, row_exp)
+                new_clustering = [client.cluster_id for client in list_clients]
+                if old_clustering == new_clustering :
+                    stop = True     
+        
         for client in list_clients:
             print("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
             client.round_acc.append(acc)
 
+    # Evaluate final model on test set
     for client in list_clients :
 
         acc = test_model(fl_server.clusters_models[client.cluster_id], client.data_loader['test'])    

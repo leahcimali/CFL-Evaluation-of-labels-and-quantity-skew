@@ -171,3 +171,5 @@ granular_results.xlsx
 exp_configs.csv
 Results.xlsx
 tracking/*
+*.png
+myenv/*

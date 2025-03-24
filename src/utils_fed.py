@@ -240,8 +240,17 @@ def k_means_clustering(fl_server : Server, list_clients : list, num_clusters : i
     if metric == 'edc': 
         weight_matrix = model_weight_matrix(fl_server,list_clients,model_update=model_update)
         weight_matrix = EDC(weight_matrix, num_clusters, seed)
-    kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
-    kmeans.fit(weight_matrix)
+    while num_clusters > 1 :
+        try:
+            kmeans = KMeans(n_clusters=num_clusters, random_state=seed)
+            kmeans.fit(weight_matrix)
+            break
+        except :
+            num_clusters -= 1
+            print(f"Warning: KMeans failed with {num_clusters+1} clusters. Trying with {num_clusters} clusters.")
+            if num_clusters == 1:
+                print("Error: KMeans failed with 1 cluster. Exiting.")
+    
     weight_matrix = pd.DataFrame(weight_matrix)
 
     weight_matrix['cluster'] = kmeans.labels_

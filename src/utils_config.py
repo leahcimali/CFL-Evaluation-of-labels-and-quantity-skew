@@ -15,9 +15,7 @@ def get_base_params():
             ('fedgroup', 'edc'),
             ('ifca', 'best'),
             ('srfca', 'None'),
-            ('cornflqs', '1-10-10'),
-            ('cornflqs', '10-1-10'),
-            ('cornflqs', '1-1-20'),
+            ('cornflqs', 'euclidean'),
             ('oracle-centralized', 'clustering')
         ],
         'seed_values': [42, 43, 44, 45, 46],

@@ -31,6 +31,16 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
 
     from src.utils_data import setup_experiment, get_uid, global_test_data
     # To ADD as a parameter in config file in the future
+    import os
+
+    # List of folders to ensure exist
+    folders = ["granular_results", "results", "datasets", "tracking"]
+
+    for folder in folders:
+        os.makedirs(folder, exist_ok=True)  # Create folder if it doesn't exist
+    
+    # set a global test set for all clients in the same heterogeneity class 
+    # TO DO for local.  
     test = 'global'
 
     row_exp = pd.Series({"exp_type": exp_type, "params": params, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,

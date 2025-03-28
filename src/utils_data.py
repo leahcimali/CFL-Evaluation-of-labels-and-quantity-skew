@@ -401,7 +401,7 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
 
     """
 
-    from src.models import GenericConvModel,GenericLinearModel
+    from src.models import GenericConvModel,GenericLinearModel, SimpleConvModel
     from src.utils_fed import init_server_cluster
     import torch
     
@@ -410,17 +410,19 @@ def setup_experiment(row_exp: dict) -> Tuple[Server, list]:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     torch.manual_seed(row_exp['seed'])
-
-    imgs_params = {'mnist': (28,1) , 'fashion-mnist': (28,1), 'kmnist': (28,1), 'pathmnist':(28,3)
-                   , 'tissuemnist':(28,1),'octmnist':(28,1), 'cifar10': (32,3)}
+    # image size, number of channels, number of classes
+    imgs_params = {'mnist': (28,1,10) , 'fashion-mnist': (28,1,10), 'kmnist': (28,1,10), 'pathmnist':(28,3,9)
+                   , 'tissuemnist':(28,1,8),'octmnist':(28,1,4), 'cifar10': (32,3,10)}
 
     if row_exp['nn_model'] == "linear":
         
         fl_server = Server(GenericLinearModel(in_size=imgs_params[row_exp['dataset']][0])) 
     
     elif row_exp['nn_model'] == "convolutional": 
-        
-        fl_server = Server(GenericConvModel(in_size=imgs_params[row_exp['dataset']][0], n_channels=imgs_params[row_exp['dataset']][1]))
+        if row_exp['dataset'] in ['tissuemnist','octmnist']:
+            fl_server = Server(SimpleConvModel(in_size=imgs_params[row_exp['dataset']][0], n_channels=imgs_params[row_exp['dataset']][1],num_classes=imgs_params[row_exp['dataset']][2]))
+        else : 
+            fl_server = Server(GenericConvModel(in_size=imgs_params[row_exp['dataset']][0], n_channels=imgs_params[row_exp['dataset']][1],num_classes=imgs_params[row_exp['dataset']][2]))
        
 
     fl_server.model.to(device)

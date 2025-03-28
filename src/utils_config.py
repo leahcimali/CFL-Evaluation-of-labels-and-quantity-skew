@@ -52,8 +52,7 @@ def generate_combinations(base_data, params):
         nn_model_used = 'convolutional' if base[0] in ['cifar10','pathmnist','octmnist','tissuemnist'] else params['nn_model']
         epochs_used = 5 if base[0]in ['cifar10','pathmnist','octmnist','tissuemnist'] else epochs
         rounds_used = 100 if base[0] in ['cifar10','pathmnist','octmnist','tissuemnist'] else params['rounds']
-        num_samples_by_labels_used = 100 if base[0] in ['pathmnist', 'octmnist'] else \
-                         200 if base[0] == 'tissuemnist' else params['num_samples_by_label']
+        num_samples_by_labels_used = 100 if base[0] in ['pathmnist'] else params['num_samples_by_label']
         combination = base + [exp_type, exp_param, seed, nn_model_used, 
                       params['number_of_clients'], num_samples_by_labels_used, params['num_clusters'], epochs_used, rounds_used]
         all_combinations.append(combination)

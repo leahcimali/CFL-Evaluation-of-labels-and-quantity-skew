@@ -372,7 +372,7 @@ def init_server_cluster(fl_server : Server, list_clients : list, row_exp : dict,
         ifca_seed : Seed for model initialization to allow reproducibility. Different seed than data distribution seed.
     """
     
-    from src.models import GenericLinearModel, GenericConvModel
+    from src.models import GenericLinearModel, GenericConvModel, SimpleConvModel
     import numpy as np
     import copy
     
@@ -394,7 +394,10 @@ def init_server_cluster(fl_server : Server, list_clients : list, row_exp : dict,
         fl_server.clusters_models = {cluster_id: GenericLinearModel(in_size=imgs_params[0]) for cluster_id in range(row_exp['num_clusters'])}
         
     elif row_exp['nn_model'] == 'convolutional':
-        fl_server.clusters_models = {cluster_id: GenericConvModel(in_size=imgs_params[0], n_channels=imgs_params[1]) for cluster_id in range(row_exp['num_clusters'])}
+        if row_exp['dataset'] in ['tissuemnist','octomnist']: 
+            fl_server.clusters_models = {cluster_id: GenericConvModel(in_size=imgs_params[0], n_channels=imgs_params[1],num_classes=imgs_params[2]) for cluster_id in range(row_exp['num_clusters'])}
+        else :
+            fl_server.clusters_models = {cluster_id: SimpleConvModel(in_size=imgs_params[0], n_channels=imgs_params[1],num_classes=imgs_params[2]) for cluster_id in range(row_exp['num_clusters'])}
     
     for client in list_clients:
     

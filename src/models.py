@@ -81,7 +81,7 @@ def conv_block(in_channels, out_channels, pool=False):
     return nn.Sequential(*layers)
 
 class GenericConvModel(ImageClassificationBase):
-    def __init__(self, in_size, n_channels):
+    def __init__(self, in_size, n_channels,num_classes=10):
         super().__init__()
         num_classes = 10 
 
@@ -107,3 +107,23 @@ class GenericConvModel(ImageClassificationBase):
         out = self.res2(out) + out
         out = self.classifier(out)
         return out
+
+# Simple CNN model for TissueMNIST/OctMNIST
+class SimpleConvModel(ImageClassificationBase):
+    def __init__(self, in_size, n_channels, num_classes=10):
+        super().__init__()
+        self.in_size = in_size
+        self.n_channels = n_channels
+        self.conv1 = nn.Conv2d(n_channels, 16, kernel_size=3, padding=1)  # Input: in_size x in_size, Output: 16 x in_size x in_size
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)  # Output: 32 x in_size x in_size
+        self.pool = nn.MaxPool2d(2, 2)  # MaxPool: in_size x in_size → in_size/2 x in_size/2
+        self.fc1 = nn.Linear(32 * (in_size // 2) * (in_size // 2), 128)  # Flattened to 128 units
+        self.fc2 = nn.Linear(128, num_classes)  # Output layer for classes
+
+    def forward(self, xb):
+        xb = F.relu(self.conv1(xb))
+        xb = self.pool(F.relu(self.conv2(xb)))
+        xb = xb.view(-1, 32 * (self.in_size // 2) * (self.in_size // 2))  # Flatten
+        xb = F.relu(self.fc1(xb))
+        xb = self.fc2(xb)
+        return xb

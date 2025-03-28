@@ -161,15 +161,19 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 test_config.csv
-results/*
-datasets/*
 *.sh
 Archive/*
 server.ts
-granular_results/*
 granular_results.xlsx
 exp_configs.csv
 Results.xlsx
-tracking/*
 *.png
 myenv/*
+granular_results/*
+!granular_results/.gitkeep
+results/*
+!results/.gitkeep
+datasets/*
+!datasets/.gitkeep
+tracking/*
+!tracking/.gitkeep

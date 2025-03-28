@@ -605,6 +605,7 @@ def apply_invert_greyscale_and_zoom(list_clients : list, row_exp : dict) -> list
     Returns:
         Updated list of clients
     """
+    import numpy as np
     
     number_of_client_per_transformation = row_exp['num_clients'] // 4
 
@@ -625,14 +626,18 @@ def apply_invert_greyscale_and_zoom(list_clients : list, row_exp : dict) -> list
             elif i == 2:
                 h, w = client.data['x'].shape[1:3]
                 client.data['x'] = client.data['x'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom
+                client.data['x'] = np.pad(client.data['x'], ((0, 0), (7, 7), (7, 7)), mode='constant', constant_values=0)  # Add padding
                 client.data['x_test'] = client.data['x_test'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom for test data
+                client.data['x_test'] = np.pad(client.data['x_test'], ((0, 0), (7, 7), (7, 7)), mode='constant', constant_values=0)  # Add padding for test data
                 client.heterogeneity_class = 'zoom'
             elif i == 3:
                 h, w = client.data['x'].shape[1:3]
                 client.data['x'] = 255 - client.data['x']  # Invert greyscale
                 client.data['x'] = client.data['x'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom
+                client.data['x'] = np.pad(client.data['x'], ((0, 0), (7, 7), (7, 7)), mode='constant', constant_values=0)  # Add padding
                 client.data['x_test'] = 255 - client.data['x_test']  # Invert greyscale for test data
                 client.data['x_test'] = client.data['x_test'][:, h//4:3*h//4, w//4:3*w//4]  # Apply zoom for test data
+                client.data['x_test'] = np.pad(client.data['x_test'], ((0, 0), (7, 7), (7, 7)), mode='constant', constant_values=0)  # Add padding for test data
                 client.heterogeneity_class = 'inverted_greyscale_zoom'
             
             data_preparation(client, row_exp)

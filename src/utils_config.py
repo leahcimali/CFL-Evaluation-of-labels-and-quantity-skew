@@ -30,8 +30,8 @@ def get_base_params():
 @click.option('--dataset', default=None, help='Specify dataset to use')
 @click.option('--heterogeneity_class', default=None, help='Specify heterogeneity class to use')
 @click.option('--skew', default=None, help='Specify skew to use')
-
-def main(dataset, heterogeneity_class, skew):
+@click.option('--filename', default='exp_configs.csv', help='Specify output file name')
+def main(dataset, heterogeneity_class, skew, filename):
     params = get_base_params()
     
     datasets = [dataset] if dataset else params['datasets']
@@ -40,7 +40,7 @@ def main(dataset, heterogeneity_class, skew):
     
     base_data = generate_base_data(datasets, heterogeneity_classes, skews)
     combinations = generate_combinations(base_data, params)
-    save_combinations_to_csv(combinations, 'exp_configs.csv')
+    save_combinations_to_csv(combinations, filename)
 
 def generate_base_data(datasets, heterogeneity_classes, skews):
     return [[dataset, heterogeneity, skew] for dataset in datasets for heterogeneity in heterogeneity_classes for skew in skews]

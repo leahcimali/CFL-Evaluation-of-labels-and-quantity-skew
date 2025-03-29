@@ -5,7 +5,7 @@ import click
 def get_base_params():
     return {
         'datasets': ['mnist', 'fashion-mnist', 'kmnist', 'cifar10','pathmnist','octmnist','tissuemnist'],
-        'heterogeneity_type': ['concept-shift-on-features', 'concept-shift-on-labels', 'features-distribution-skew'],
+        'heterogeneity_types': ['concept-shift-on-features', 'concept-shift-on-labels', 'features-distribution-skew'],
         'skews': ['None', 'quantity-skew-type-1', 'quantity-skew-type-2'],
         'exp_params_list': [
             ('fedavg', 'None'),

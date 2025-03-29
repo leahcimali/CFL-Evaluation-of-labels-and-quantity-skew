@@ -177,3 +177,4 @@ datasets/*
 !datasets/.gitkeep
 tracking/*
 !tracking/.gitkeep
+config.csv

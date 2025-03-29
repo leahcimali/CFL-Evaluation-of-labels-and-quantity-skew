@@ -731,7 +731,7 @@ def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.Dat
 
 
 def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, lambda_threshold : float,connection_size_t : int,refine_step = False)-> None:
-  """
+    """
     Refine the model aggregation and cluster assignments for clients by performing 
     trimmed mean aggregation and optionally reclustering and merging.
 
@@ -747,23 +747,24 @@ def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, 
     Returns:
         None: This function modifies the server model and client assignments in place.
     """
+    from src.utils_fed import send_clusters_models_to_clients
+    #STEP 1) Trimmed Mean on each cluster 
+    print('trimmed Mean Step')
+    for cluster_id in range(row_exp['num_clusters']) :
+        cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
+        fl_server.clusters_models[cluster_id] = trimmed_mean_beta_aggregation(fl_server.clusters_models[cluster_id], cluster_clients_list,row_exp,beta)
+
+    if refine_step == True :
+
+        #STEP 2) Recluster
+        print('Recluster')
+        recluster(fl_server,list_clients,row_exp)
+
+        #STEP 3) Merge
+        print('Merge')
+        fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
+    send_clusters_models_to_clients(list_clients,fl_server)
   
-  #STEP 1) Trimmed Mean on each cluster 
-  print('trimmed Mean Step')
-  for cluster_id in range(row_exp['num_clusters']) :
-    cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
-    fl_server.clusters_models[cluster_id] = trimmed_mean_beta_aggregation(fl_server.clusters_models[cluster_id], cluster_clients_list,row_exp,beta)
-  
-  if refine_step == True :
-
-    #STEP 2) Recluster
-    print('Recluster')
-    recluster(fl_server,list_clients,row_exp)
-
-    #STEP 3) Merge
-    print('Merge')
-    fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
-
 def recluster(fl_server: Server, list_clients : list, row_exp : dict)-> None : 
   """
     Reassign clients to clusters based on their distance to cluster models.

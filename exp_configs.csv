@@ -1,4 +1,4 @@
-exp_type,params,dataset,nn_model,heterogeneity_class,skew,number_of_clients,num_samples_by_label,num_clusters,epochs,rounds,seed
+exp_type,params,dataset,nn_model,heterogeneity_type,skew,number_of_clients,num_samples_by_label,num_clusters,epochs,rounds,seed
 fedavg,None,mnist,linear,concept-shift-on-features,None,100,50,4,10,20,42
 fedavg,None,mnist,linear,concept-shift-on-features,None,100,50,4,10,20,43
 fedavg,None,mnist,linear,concept-shift-on-features,None,100,50,4,10,20,44

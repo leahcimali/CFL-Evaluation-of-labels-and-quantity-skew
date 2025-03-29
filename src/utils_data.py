@@ -357,7 +357,7 @@ def data_preparation(client: Client, row_exp: dict) -> None:
 
 
 
-def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
+def get_dataset_heterogeneities(row_exp) -> dict:
 
     """
     Retrieves the "skew" and "ratio" attributes of a given heterogeneity type
@@ -368,7 +368,7 @@ def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
         dict_params: A dictionary of the form {<het>: []} where <het> is the applicable heterogeneity type 
     """
     dict_params = {}
-
+    heterogeneity_type = row_exp['heterogeneity_type']
     if 'labels-distribution-skew' in heterogeneity_type :
         dict_params['ratios'] = [
     [0.05, 0.2875, 0.525, 0.7625, 0.95, 0.7625, 0.525, 0.2875, 0.10,0.05],  # Normal distribution
@@ -378,7 +378,10 @@ def get_dataset_heterogeneities(heterogeneity_type: str) -> dict:
     ]
     
     elif 'concept-shift-on-labels' in heterogeneity_type :
-        dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8)]
+        if row_exp['dataset'] == 'octmnist':
+            dict_params['swaps'] = [(0,1),(0,2),(1,3),(2,3)]
+        else : 
+            dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8)]
 
     elif 'quantity-skew' in heterogeneity_type :
         dict_params['skews'] = [0.1,0.2,0.6,1]

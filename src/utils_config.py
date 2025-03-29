@@ -5,7 +5,7 @@ import click
 def get_base_params():
     return {
         'datasets': ['mnist', 'fashion-mnist', 'kmnist', 'cifar10','pathmnist','octmnist','tissuemnist'],
-        'heterogeneity_classes': ['concept-shift-on-features', 'concept-shift-on-labels', 'features-distribution-skew'],
+        'heterogeneity_type': ['concept-shift-on-features', 'concept-shift-on-labels', 'features-distribution-skew'],
         'skews': ['None', 'quantity-skew-type-1', 'quantity-skew-type-2'],
         'exp_params_list': [
             ('fedavg', 'None'),
@@ -28,22 +28,22 @@ def get_base_params():
     }
 @click.command()
 @click.option('--dataset', default=None, help='Specify dataset to use')
-@click.option('--heterogeneity_class', default=None, help='Specify heterogeneity class to use')
+@click.option('--heterogeneity_type', default=None, help='Specify heterogeneity type to use')
 @click.option('--skew', default=None, help='Specify skew to use')
 @click.option('--filename', default='exp_configs.csv', help='Specify output file name')
-def main(dataset, heterogeneity_class, skew, filename):
+def main(dataset, heterogeneity_type, skew, filename):
     params = get_base_params()
     
     datasets = [dataset] if dataset else params['datasets']
-    heterogeneity_classes = [heterogeneity_class] if heterogeneity_class else params['heterogeneity_classes']
+    heterogeneity_types = [heterogeneity_type] if heterogeneity_type else params['heterogeneity_types']
     skews = [skew] if skew else params['skews']
     
-    base_data = generate_base_data(datasets, heterogeneity_classes, skews)
+    base_data = generate_base_data(datasets, heterogeneity_types, skews)
     combinations = generate_combinations(base_data, params)
     save_combinations_to_csv(combinations, filename)
 
-def generate_base_data(datasets, heterogeneity_classes, skews):
-    return [[dataset, heterogeneity, skew] for dataset in datasets for heterogeneity in heterogeneity_classes for skew in skews]
+def generate_base_data(datasets, heterogeneity_types, skews):
+    return [[dataset, heterogeneity, skew] for dataset in datasets for heterogeneity in heterogeneity_types for skew in skews]
 
 def generate_combinations(base_data, params):
     all_combinations = []
@@ -59,9 +59,9 @@ def generate_combinations(base_data, params):
     return all_combinations
 
 def save_combinations_to_csv(combinations, filename):
-    columns = ['dataset', 'heterogeneity_class', 'skew', 'exp_type', 'params', 'seed', 'nn_model', 'number_of_clients', 'num_samples_by_label', 'num_clusters', 'epochs', 'rounds']
+    columns = ['dataset', 'heterogeneity_type', 'skew', 'exp_type', 'params', 'seed', 'nn_model', 'number_of_clients', 'num_samples_by_label', 'num_clusters', 'epochs', 'rounds']
     df_combinations = pd.DataFrame(combinations, columns=columns)
-    df_combinations = df_combinations[['exp_type', 'params', 'dataset', 'nn_model', 'heterogeneity_class', 'skew', 'number_of_clients', 'num_samples_by_label', 'num_clusters', 'epochs', 'rounds', 'seed']]
+    df_combinations = df_combinations[['exp_type', 'params', 'dataset', 'nn_model', 'heterogeneity_type', 'skew', 'number_of_clients', 'num_samples_by_label', 'num_clusters', 'epochs', 'rounds', 'seed']]
     df_combinations.to_csv(filename, index=False)
 
 if __name__ == "__main__":

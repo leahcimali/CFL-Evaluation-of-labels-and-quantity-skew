@@ -231,14 +231,14 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
 
     """
 
-    from src.utils_fed import k_means_clustering, Agglomerative_Clustering, fedavg, set_client_cluster
+    from src.utils_fed import fedavg, set_client_cluster, send_clusters_models_to_clients
     import copy
     import torch 
     import ast
     torch.manual_seed(row_exp['seed'])
     communication_rounds = row_exp['rounds']
     clustering_metric = str(row_exp['params'])
-    # Cold start clustering with unponderated fedavg for 1 communication round
+    # Cold start clustering weights with unponderated fedavg for 1 communication round
     row_exp['rounds'] = 1
     # Cold start
     # Train the federated model with unponderated fedavg for n = cold_rounds rounds
@@ -246,37 +246,42 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
-    for client in list_clients:
-        print("Training client ", client.id)
-        client.model, _ , acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-        client.round_acc.append(acc)
-    
+   
     row_exp['rounds'] = communication_rounds
+    
     # Perform clustering optimal research between client and server
-    try :
-        client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
-    except : 
-        client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm)
+    client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
+    if client_only_rounds > row_exp['rounds'] // 2:
+        print('Early stop CORN')
     # Client only rounds
     #Stop parameter for client side clustering if the clustering is the same on two consecutive rounds 
     stop = False
-    
+    algorithm_type = 'client-sided clustering'
+
     for round in range(client_only_rounds):
-        fedavg(fl_server, list_clients) # Do fedavg by cluster
+        print(f'Communication Round {algorithm_type} at round :' + str(round+1+ communication_rounds-client_only_rounds))
+        # Do fedavg by cluster
         #Continue client side clustering only if server and client never reached an agreement
+        old_clustering = [client.cluster_id for client in list_clients]
+
         if stop == False :
-            if client_only_rounds == row_exp['rounds']//2 : 
-                old_clustering = [client.cluster_id for client in list_clients]
-                set_client_cluster(fl_server, list_clients, row_exp)
-                new_clustering = [client.cluster_id for client in list_clients]
-                if old_clustering == new_clustering :
-                    stop = True     
+            set_client_cluster(fl_server, list_clients, row_exp)
+            new_clustering = [client.cluster_id for client in list_clients]
+            matches = sum(1 for a, b in zip(old_clustering, new_clustering) if a == b)
+            match_percentage = (matches / len(old_clustering)) * 100
+            print(f'match percentage client-side {match_percentage}')
+            if old_clustering == new_clustering and round > 0 :
+                print('early stop client-side clustering')
+                algorithm_type = 'FedAVG by cluster'
+                stop = True     
+        else :
+            send_clusters_models_to_clients(list_clients, fl_server)
         
         for client in list_clients:
-            print("Training client ", client.id)
-            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, mu = 0.1)
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
-
+        fedavg(fl_server, list_clients)
+    
     # Evaluate final model on test set
     for client in list_clients :
 
@@ -309,6 +314,11 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
 
     
     for round in range(row_exp['rounds']//2):
+        print('Communication Round CORN at round' + str(round+1))
+        for client in list_clients:
+            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
+            client.round_acc.append(acc)
+            
         if round == 0 :
             model_update = True
         else :
@@ -328,10 +338,7 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
         set_client_cluster(fl_server, list_clients, row_exp)
         # store the client-side cluster IDs for comparison
         client_side_client_cluster_id = [client.cluster_id for client in list_clients]
-        for client in list_clients:
-            print("Training client ", client.id)
-            client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
-            client.round_acc.append(acc)
+        
 
         # Calculate the percentage of matching cluster IDs
         matches = sum(1 for a, b in zip(server_side_client_cluster_id, client_side_client_cluster_id) if a == b)

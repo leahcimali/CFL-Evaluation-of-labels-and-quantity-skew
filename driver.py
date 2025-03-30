@@ -39,7 +39,7 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
     for folder in folders:
         os.makedirs(folder, exist_ok=True)  # Create folder if it doesn't exist
     
-    # set a global test set for all clients in the same heterogeneity class 
+    # set a global test set for all clients in the same heterogeneity type
     # TO DO for local.  
     test = 'global'
 

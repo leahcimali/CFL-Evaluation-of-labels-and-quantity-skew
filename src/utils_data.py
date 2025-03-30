@@ -369,7 +369,7 @@ def get_dataset_heterogeneities(row_exp) -> dict:
     """
     dict_params = {}
     heterogeneity_type = row_exp['heterogeneity_type']
-    if 'labels-distribution-skew' in heterogeneity_type :
+    if heterogeneity_type == 'labels-distribution-skew':
         dict_params['ratios'] = [
     [0.05, 0.2875, 0.525, 0.7625, 0.95, 0.7625, 0.525, 0.2875, 0.10,0.05],  # Normal distribution
     [0.95, 0.7125, 0.475, 0.2375, 0.05, 0.1, 0.2375, 0.475, 0.7125, 0.95],  # Complementary to normal distribution
@@ -377,13 +377,13 @@ def get_dataset_heterogeneities(row_exp) -> dict:
     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]        # Right-skewed distribution
     ]
     
-    elif 'concept-shift-on-labels' in heterogeneity_type :
+    elif heterogeneity_type == 'concept-shift-on-labels':
         if row_exp['dataset'] == 'octmnist':
             dict_params['swaps'] = [(0,1),(0,2),(1,3),(2,3)]
         else : 
             dict_params['swaps'] = [(1,7),(2,7),(4,7),(3,8)]
 
-    elif 'quantity-skew' in heterogeneity_type :
+    elif  heterogeneity_type == 'quantity-skew' :
         dict_params['skews'] = [0.1,0.2,0.6,1]
     
 
@@ -459,7 +459,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         The updated list of clients
     """
 
-    dict_params = get_dataset_heterogeneities(row_exp['heterogeneity_type'])
+    dict_params = get_dataset_heterogeneities(row_exp)
     # Concept shift on features
     if row_exp['heterogeneity_type']  == "concept-shift-on-features": # rotations
         if row_exp['skew'] == "quantity-skew-type-1":
@@ -474,7 +474,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         else :
             list_clients = apply_rotation(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
-            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            dict_params = get_dataset_heterogeneities(row_exp)    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
     # Concept shift on labels    
@@ -486,7 +486,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         # if skew as value none or other value will not apply skewness
         list_clients = apply_label_swap(list_clients, row_exp, dict_params['swaps'])
         if row_exp['skew'] == "label-skew":
-            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            dict_params = get_dataset_heterogeneities(row_exp)    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
     # Features distribution skew        
@@ -498,7 +498,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         # if skew as value none or other value will not apply skewness
         list_clients = apply_features_skew(list_clients, row_exp)
         if row_exp['skew'] == "label-skew":
-            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            dict_params = get_dataset_heterogeneities(row_exp)    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
     # Labels distribution skew
@@ -514,7 +514,7 @@ def add_clients_heterogeneity(list_clients: list, row_exp: dict) -> list:
         elif row_exp['skew'] == "quantity-skew-type-2":
             list_clients = apply_quantity_skew(list_clients, row_exp, [0.05,0.2,1,2],skew_type = 2) 
         elif row_exp['skew'] == "label-skew":
-            dict_params = get_dataset_heterogeneities("labels-distribution-skew")    
+            dict_params = get_dataset_heterogeneities(row_exp)    
             list_clients = apply_labels_skew(list_clients, row_exp, # less images of certain labels
                                           dict_params['ratios'])
         for client in list_clients:

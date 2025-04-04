@@ -51,14 +51,14 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
     output_name =  row_exp.to_string(header=False, index=False, name=False).replace(' ', "").replace('\n','_')
     
     hash_outputname = get_uid(output_name)
-    setup_logging(hash_outputname)
+    setup_logging(output_name)
     pathlist = Path("results").rglob('*.json')
 
     for file_name in pathlist:
 
         if get_uid(str(file_name.stem)) == hash_outputname:
 
-            print(f"Experiment {str(file_name.stem)} already executed in with results in \n {output_name}.json")   
+            cprint(f"Experiment {str(file_name.stem)} already executed in with results in \n {output_name}.json")   
         
             return 
     try:
@@ -71,14 +71,14 @@ def main_driver(exp_type,params, dataset, nn_model, heterogeneity_type, skew, nu
         
     except Exception as e:
 
-        print(f"Could not run experiment with parameters {output_name}. Exception {e}")
-        print("Exception details:")
-        traceback.print_exc()  # This will print the full traceback
+        cprint(f"Could not run experiment with parameters {output_name}. Exception {e}")
+        cprint("Exception details:")
+        traceback.print_exc()  # This will cprint the full traceback
 
         return 
     if row_exp['params'] == 'multiple':
         for model_seed in range(42,47):
-            print(f"Launching experiment with model seed {model_seed}")
+            cprint(f"Launching experiment with model seed {model_seed}")
             row_exp = pd.Series({"exp_type": exp_type, "params": model_seed, "dataset": dataset, "nn_model" : nn_model, "heterogeneity_type": heterogeneity_type, "skew": skew, "num_clients": num_clients,
                "num_samples_by_label": num_samples_by_label, "num_clusters": num_clusters, "epochs": epochs,
                "rounds": rounds, "seed": seed})
@@ -107,7 +107,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
 
         if row_exp['exp_type'] == "fedavg" or row_exp['exp_type'] == "oracle-centralized" or row_exp['exp_type'] == "fedprox":
 
-            print(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
+            cprint(f"Launching benchmark experiment with parameters:\n{str_row_exp}")   
 
             df_results, df_tracking =run_benchmark(fl_server, list_clients, row_exp)
         
@@ -118,9 +118,14 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp,algorithm='oracle-cfl',clustering_metric='none')
         
         elif row_exp['exp_type'] == "cornflqs":
-            print(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
+            cprint(f"Launching cornflqs CFL experiment with parameters:\n {str_row_exp}")
             # Use agglomerative HC + euclidean distance and ward linkage
-            df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp)
+            if row_exp['params'] == 'test':
+                ponderated = True
+                row_exp['params'] = 'euclidean'
+            else : 
+                ponderated = False
+            df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp,ponderated=ponderated)
             
             '''
             if row_exp['params']== 'edc':
@@ -135,13 +140,13 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
 
         elif row_exp['exp_type'] == "ifca":
             if row_exp['params'] == "best":
-                print('Lauching IFCA with multiple seeds!')
+                cprint('Lauching IFCA with multiple seeds!')
                 best_accuracy = 0
                 for seed in range(42,47):
                     row_exp['params'] = seed
                     fl_server, list_clients = setup_experiment(row_exp)
                     str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
-                    print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
+                    cprint(f"Launching client-side experiment with parameters:\n {str_row_exp}")
                     df, df_track = run_cfl_IFCA(fl_server, list_clients, row_exp)
                     if df['validation'].mean() > best_accuracy:
                         best_accuracy = df['validation'].mean()
@@ -152,27 +157,27 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                 df_results, df_tracking =run_cfl_IFCA(fl_server, list_clients, row_exp)
 
             else : 
-                print(f"Launching client-side experiment with parameters:\n {str_row_exp}")
+                cprint(f"Launching client-side experiment with parameters:\n {str_row_exp}")
                 df_results, df_tracking =run_cfl_IFCA(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == "cfl":
 
-            print(f"Launching server-side experiment with parameters:\n {str_row_exp}")
+            cprint(f"Launching server-side experiment with parameters:\n {str_row_exp}")
             
-            print('Using Kmeans Clustering!')
+            cprint('Using Kmeans Clustering!')
             df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == 'hcfl': 
-            print('Using Agglomerative Clustering!')
+            cprint('Using Agglomerative Clustering!')
             
             df_results, df_tracking =run_cfl_server_side(fl_server, list_clients, row_exp)
         
         elif row_exp['exp_type'] == "fedgroup":
             #iterative server-side
-            print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+            cprint(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
             
             if row_exp['params'] == 'madc':
-                print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+                cprint(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
             
                 df_results, df_tracking =run_fedgroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'agglomerative', clustering_metric = 'madc')
             
@@ -180,7 +185,7 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
                 
                 row_exp['params'] = 'edc'
                 str_row_exp = ':'.join(row_exp.to_string().replace('\n', '/').split())
-                print(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
+                cprint(f"Launching FedGroup experiment with parameters:\n {str_row_exp}")
 
                 df_results, df_tracking =run_fedgroup(fl_server, list_clients, row_exp, alpha = row_exp["num_clients"], algorithm= 'kmeans', clustering_metric = 'edc')
         else:

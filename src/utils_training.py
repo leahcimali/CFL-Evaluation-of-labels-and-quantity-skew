@@ -8,7 +8,7 @@ import pandas as pd
 from src.models import ImageClassificationBase
 from src.fedclass import Server
 from src.utils_fed import store_client_accuracies 
-
+from src.utils_logging import cprint
     
         
 
@@ -35,7 +35,7 @@ def ColdStart(fl_server : Server, list_clients : list, row_exp : dict, algorithm
     selected_clients = random.sample(list_clients, k=int(client_sampling*len(list_clients)))
     send_clusters_models_to_clients(selected_clients, fl_server)
     for client in selected_clients :
-        print("Training client ", client.id)
+        cprint("Training client ", client.id)
         client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
         client.round_acc.append(acc)
         if clustering_metric == 'madc' :
@@ -79,7 +79,7 @@ def run_fedgroup(fl_server : Server, list_clients : list, row_exp : dict, alpha,
         send_clusters_models_to_clients(selected_clients, fl_server)
         
         for client in selected_clients:
-            print("Training client ", client.id)
+            cprint("Training client ", client.id)
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -136,7 +136,7 @@ def run_cfl_server_side(fl_server : Server, list_clients : list, row_exp : dict,
     if row_exp['exp_type'] == 'oracle-cfl':
         # Use Personalized for Clustered Federated Learning with knowledge of client heterogeneity class
         # Used as a benchmark for CFL.
-        print('Using personalized Federated Learning!')
+        cprint('Using personalized Federated Learning!')
         heterogeneity_classes = set([client.heterogeneity_class for client in list_clients])
         cluster_mapping = {cls: idx for idx, cls in enumerate(heterogeneity_classes)}
         for client in list_clients:
@@ -187,7 +187,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     for _ in range(row_exp['rounds']):
 
         for client in list_clients:
-            print("Training client ", client.id)
+            cprint("Training client ", client.id)
             client.model, _, acc, client.update = train_model(client.model.to(device), client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
 
@@ -209,7 +209,7 @@ def run_cfl_IFCA(fl_server : Server, list_clients : list, row_exp : dict, ponder
     return df_results, df_tracking
 
 
-def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'agglomerative', ponderated : bool = False, auto = True) -> pd.DataFrame:
+def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, algorithm : str = 'agglomerative', ponderated : bool = False) -> pd.DataFrame:
     
     """ Driver function for server-side cluster FL algorithm. The algorithm personalize training by clusters obtained
     from model weights .
@@ -242,7 +242,8 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     row_exp['rounds'] = 1
     # Cold start
     # Train the federated model with unponderated fedavg for n = cold_rounds rounds
-    fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=False)
+    cprint("Ponderated: " + str(ponderated))
+    fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=ponderated)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
     setattr(fl_server, 'num_clusters', row_exp['num_clusters'])
@@ -252,14 +253,14 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     # Perform clustering optimal research between client and server
     client_only_rounds = clustering_optimal_research_node_to_server(fl_server, list_clients, row_exp, algorithm, clustering_metric)
     if client_only_rounds > row_exp['rounds'] // 2:
-        print('Early stop CORN')
+        cprint('Early stop CORN')
     # Client only rounds
     #Stop parameter for client side clustering if the clustering is the same on two consecutive rounds 
     stop = False
     algorithm_type = 'client-sided clustering'
 
     for round in range(client_only_rounds):
-        print(f'Communication Round {algorithm_type} at round :' + str(round+1+ communication_rounds-client_only_rounds))
+        cprint(f'Communication Round {algorithm_type} at round :' + str(round+1+ communication_rounds-client_only_rounds))
         # Do fedavg by cluster
         #Continue client side clustering only if server and client never reached an agreement
         old_clustering = [client.cluster_id for client in list_clients]
@@ -269,9 +270,9 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
             new_clustering = [client.cluster_id for client in list_clients]
             matches = sum(1 for a, b in zip(old_clustering, new_clustering) if a == b)
             match_percentage = (matches / len(old_clustering)) * 100
-            print(f'match percentage client-side {match_percentage}')
+            cprint(f'match percentage client-side {match_percentage}')
             if old_clustering == new_clustering and round > 0 :
-                print('early stop client-side clustering')
+                cprint('early stop client-side clustering')
                 algorithm_type = 'FedAVG by cluster'
                 stop = True     
         else :
@@ -314,7 +315,7 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
 
     
     for round in range(row_exp['rounds']//2):
-        print('Communication Round CORN at round' + str(round+1))
+        cprint('Communication Round CORN at round' + str(round+1))
         for client in list_clients:
             client.model, _ , acc, client.update= train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp)
             client.round_acc.append(acc)
@@ -343,7 +344,7 @@ def clustering_optimal_research_node_to_server(fl_server: Server, list_clients: 
         # Calculate the percentage of matching cluster IDs
         matches = sum(1 for a, b in zip(server_side_client_cluster_id, client_side_client_cluster_id) if a == b)
         match_percentage = (matches / len(server_side_client_cluster_id)) * 100
-        print(f"Match percentage: {match_percentage}%")
+        cprint(f"Match percentage: {match_percentage}%")
         if match_percentage >= match :
             client_side_clustering_rounds = row_exp['rounds'] - round
             break
@@ -467,11 +468,12 @@ def train_federated(fl_server, list_clients, row_exp, use_clusters_models = Fals
             send_clusters_models_to_clients(list_clients, fl_server)
 
         for client in list_clients:
-            print(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
+            cprint(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
             client.model, curr_acc, val_acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, fedprox_mu)
             client.round_acc.append(val_acc)
             accs.append(curr_acc)
-            fedavg(fl_server, list_clients,ponderated)
+        
+        fedavg(fl_server, list_clients,ponderated)
 
     return fl_server
 
@@ -552,7 +554,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
             # Accumulate gradients
             for i, param in enumerate(model.parameters()):
                 if param.grad is None:  # **Change: Check for None gradients**
-                    print(f"Gradient is None for parameter {i}")
+                    cprint(f"Gradient is None for parameter {i}")
                 else:
                     avg_grad[i] += param.grad.clone().detach()  # **Change: Ensure gradients are tensors**
 
@@ -569,7 +571,7 @@ def train_model(model: ImageClassificationBase, train_loader: DataLoader, val_lo
         result = evaluate(model, val_loader)  # Ensure evaluate handles CUDA as needed
         result['train_loss'] = torch.stack(train_losses).mean().item()
 
-        # Print epoch results and add to history
+        # cprint epoch results and add to history
         #model.epoch_end(epoch, result)
         history.append(result)
         
@@ -680,13 +682,13 @@ def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.Dat
   # First Training
   for client in list_clients :
       
-    print("Training client ", client.id)
+    cprint("Training client ", client.id)
     client.model, _, acc , client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'],row_exp)
     client.round_acc.append(acc)
   
   # Distance Matrix for ONE-SHOT Step
   similarity_matrix = compute_distance_matrix(list_clients)
-  print(similarity_matrix)
+  cprint(similarity_matrix)
   
   # Flatten the matrix and remove diagonal elements
   similarity_values = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)]  
@@ -694,14 +696,14 @@ def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.Dat
   lambda_threshold = np.percentile(similarity_values,percentile)
   beta = 0.15
   connection_size_t = 2 
-  print('Distance Threshold : ', lambda_threshold)
+  cprint('Distance Threshold : ', lambda_threshold)
   
   row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
   while percentile > 10 :
     percentile = percentile - 3
     lambda_threshold = np.percentile(similarity_values, percentile)+ 0.0001
     if one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix) > row_exp['num_clusters'] :
-        print('Updated Distance Threshold : ', lambda_threshold)
+        cprint('Updated Distance Threshold : ', lambda_threshold)
         row_exp['num_clusters'] = one_shot(fl_server,list_clients,lambda_threshold,connection_size_t,similarity_matrix)
         break
     
@@ -710,12 +712,12 @@ def run_srfca(fl_server : Server, list_clients : list, row_exp : dict) -> pd.Dat
 
   fl_server.num_clusters = row_exp['num_clusters']
   fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}  
-  print('Initialized Clusters : '+ str(fl_server.num_clusters))
+  cprint('Initialized Clusters : '+ str(fl_server.num_clusters))
 
   for round in range(row_exp['rounds']):
-    print('Communication Round ' + str(round+1))
+    cprint('Communication Round ' + str(round+1))
     # REFINE STEP
-    print('Doing Refine step')
+    cprint('Doing Refine step')
     refine_step = True
     if round > 3 :
        refine_step = False
@@ -749,7 +751,7 @@ def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, 
     """
     from src.utils_fed import send_clusters_models_to_clients
     #STEP 1) Trimmed Mean on each cluster 
-    print('trimmed Mean Step')
+    cprint('trimmed Mean Step')
     for cluster_id in range(row_exp['num_clusters']) :
         cluster_clients_list = [client for client in list_clients if client.cluster_id == cluster_id] 
         fl_server.clusters_models[cluster_id] = trimmed_mean_beta_aggregation(fl_server.clusters_models[cluster_id], cluster_clients_list,row_exp,beta)
@@ -757,11 +759,11 @@ def refine(fl_server : Server, list_clients : list, row_exp : dict,beta :float, 
     if refine_step == True :
 
         #STEP 2) Recluster
-        print('Recluster')
+        cprint('Recluster')
         recluster(fl_server,list_clients,row_exp)
 
         #STEP 3) Merge
-        print('Merge')
+        cprint('Merge')
         fl_server.num_clusters = merge(fl_server,list_clients,lambda_threshold,connection_size_t)
     send_clusters_models_to_clients(list_clients,fl_server)
   
@@ -842,7 +844,7 @@ def one_shot(fl_server : Server,list_clients : list, lambda_threshold: float, co
     """
 
 
-  print('Doing One Shot Clustering Initialization')
+  cprint('Doing One Shot Clustering Initialization')
   num_clients = len(list_clients)
   G = nx.Graph()
 
@@ -888,7 +890,7 @@ def trimmed_mean_beta_aggregation(model, list_clients, row_exp, beta) -> dict:
 
     # Step 1: Train each client and collect their model weights
     for client in list_clients:
-        print("Training client ", client.id)
+        cprint("Training client ", client.id)
         client.model, _, acc, client.update = train_model(
             client.model, client.data_loader['train'], client.data_loader['val'], row_exp
         )

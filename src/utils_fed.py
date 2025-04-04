@@ -4,7 +4,7 @@ import torch.nn as nn
 import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader
-
+from src.utils_logging import cprint
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def send_server_model_to_client(list_clients : list, fl_server : Server) -> None:
@@ -57,7 +57,7 @@ def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
     
     import copy
     import torch
-
+    cprint('ponderation is : ', ponderation)
     new_model = copy.deepcopy(list_clients[0].model)
 
     total_data_size = sum(len(client.data_loader['train'].dataset) for client in list_clients)
@@ -70,9 +70,10 @@ def model_avg(list_clients : list, ponderation : bool = True) -> nn.Module:
 
             data_size = len(client.data_loader['train'].dataset)
             if ponderation :
-                weight = data_size / total_data_size            
+                weight = data_size / total_data_size
             else :
                 weight = 1/ len(list_clients)
+
             weighted_avg_param += client.model.state_dict()[name] * weight
 
         param.data = weighted_avg_param #TODO: make more explicit
@@ -93,7 +94,7 @@ def fedavg(fl_server : Server, list_clients : list, ponderated : bool = True) ->
     """
     if fl_server.num_clusters == None:
 
-        fl_server.model = model_avg(list_clients,ponderated)
+        fl_server.model = model_avg(list_clients,ponderation=ponderated)
     
     else : 
          
@@ -103,7 +104,7 @@ def fedavg(fl_server : Server, list_clients : list, ponderated : bool = True) ->
             
             if len(cluster_clients_list)>0 :  
           
-                fl_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderated)
+                fl_server.clusters_models[cluster_id] = model_avg(cluster_clients_list,ponderation = ponderated)
     return
 
 

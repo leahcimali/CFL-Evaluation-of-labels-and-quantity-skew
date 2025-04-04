@@ -329,8 +329,6 @@ def data_preparation(client: Client, row_exp: dict) -> None:
     
     # Split into train, validation, and test sets
     x_train, y_train = client.data['x'], client.data['y']
-    print(x_train.shape)
-    print(type(x_train))
     #Spit test set in validation and test
     
     x_val, x_test, y_val, y_test = train_test_split(

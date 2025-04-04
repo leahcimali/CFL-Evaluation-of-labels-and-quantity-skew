@@ -242,7 +242,6 @@ def run_cfl_cornflqs(fl_server : Server, list_clients : list, row_exp : dict, al
     row_exp['rounds'] = 1
     # Cold start
     # Train the federated model with unponderated fedavg for n = cold_rounds rounds
-    cprint("Ponderated: " + str(ponderated))
     fl_server = train_federated(fl_server, list_clients, row_exp, use_clusters_models = False, ponderated=ponderated)
     fl_server.clusters_models= {cluster_id: copy.deepcopy(fl_server.model) for cluster_id in range(row_exp['num_clusters'])}
     
@@ -456,7 +455,7 @@ def train_federated(fl_server, list_clients, row_exp, use_clusters_models = Fals
     from src.utils_fed import send_server_model_to_client, send_clusters_models_to_clients, fedavg
     
     for i in range(int(row_exp['rounds'])):
-
+        cprint('Communication Round ' + str(i+1))
         accs = []
 
         if use_clusters_models == False:
@@ -468,7 +467,7 @@ def train_federated(fl_server, list_clients, row_exp, use_clusters_models = Fals
             send_clusters_models_to_clients(list_clients, fl_server)
 
         for client in list_clients:
-            cprint(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
+            #cprint(f"Training client {client.id} with dataset of size {client.data['x'].shape}")
             client.model, curr_acc, val_acc, client.update = train_model(client.model, client.data_loader['train'], client.data_loader['val'], row_exp, fedprox_mu)
             client.round_acc.append(val_acc)
             accs.append(curr_acc)

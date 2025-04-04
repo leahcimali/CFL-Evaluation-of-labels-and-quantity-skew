@@ -128,14 +128,11 @@ def launch_experiment(fl_server, list_clients, row_exp, output_name, save_result
             df_results, df_tracking = run_cfl_cornflqs(fl_server,list_clients,row_exp,ponderated=ponderated)
             
             '''
+            TO DO if need add more metrics
             if row_exp['params']== 'edc':
                 df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='edc')
-            elif row_exp['params']== 'euclidean':
-                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='euclidean')
             elif row_exp['params']== 'madc':
                 df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'agglomerative', clustering_metric='madc')
-            elif row_exp['params']== 'kmeans':
-                df_results, df_tracking =run_cfl_cornflqs(fl_server,list_clients,row_exp,algorithm = 'kmeans', clustering_metric='euclidean')
             '''
 
         elif row_exp['exp_type'] == "ifca":

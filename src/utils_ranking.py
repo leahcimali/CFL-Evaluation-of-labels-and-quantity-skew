@@ -2,6 +2,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import Border, Side, Font
+import shutil
 
 def load_and_prepare_data(skew):
     """
@@ -126,7 +127,7 @@ def main():
     results_qt1 = algo_ranking(skew='quantity-skew-type-1')
     results_qst2 = algo_ranking(skew='quantity-skew-type-2')
     results_noqs = algo_ranking(skew='None')
-
+    shutil.copy('granular_results.xlsx', 'Results.xlsx')
     wb = load_workbook('Results.xlsx')
     ws = wb.create_sheet(title='Global_results')
 

@@ -564,19 +564,38 @@ def main_excel():
     print("Excel file created successfully!")
 
 from src.utils_ranking import main as ranking_main
-
+import os
 if __name__ == "__main__":
     import sys
+    import os
+
     if len(sys.argv) > 1:
         base_path = sys.argv[1]
     else:
         base_path = "results/"
 
+    # Delete granular_results.xlsx if it exists
+    if os.path.exists("granular_results.xlsx"):
+        os.remove("granular_results.xlsx")
+
+    # Delete results/summarized_results.csv if it exists
+    summarized_results_path = os.path.join(base_path, "summarized_results.csv")
+    if os.path.exists(summarized_results_path):
+        os.remove(summarized_results_path)
+
+    # Delete all files inside the granular_results folder
+    granular_results_folder = "granular_results"
+    if os.path.exists(granular_results_folder):
+        for root, dirs, files in os.walk(granular_results_folder, topdown=False):
+            for file in files:
+                os.remove(os.path.join(root, file))
+            for dir in dirs:
+                os.rmdir(os.path.join(root, dir))
+        os.rmdir(granular_results_folder)
+
     save_histograms(base_path)
     summarize_results(base_path)
     granular_results(base_path)
-    try : 
-        main_excel()
-        ranking_main()
-    except :
-        print('Excel generation not working on this system')
+
+    main_excel()
+    ranking_main()
